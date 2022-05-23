@@ -4,13 +4,17 @@ from typing import Optional, Union
 import cbor2 as cbor
 import requests as rq
 from requests import Response
-from requests.exceptions import InvalidSchema
+
+
+def has_valid_schema(host: str):
+    return host.startswith("https://") or host.startswith("http://")
 
 
 class DTNClient:
 
     # API endpoints
     DOWNLOAD_ENDPOINT = "/download"
+    ENDPOINT_ENDPOINT = "/endpoint"
     REGISTER_ENDPOINT = "/register"
     SEND_ENDPOINT = "/send"
     UNREGISTER_ENDPOINT = "/unregister"
@@ -30,10 +34,10 @@ class DTNClient:
         if port is None:
             port = 3000
 
-        if host.startswith("https://") or host.startswith("http://"):
+        if has_valid_schema(host):
             self._host = host
         else:
-            raise InvalidSchema("Host attribute must start either with 'http://' or 'https://'")
+            raise ValueError("Host attribute must start either with 'http://' or 'https://'")
 
         self._port = port
         self._endpoints = endpoints if endpoints is not None else []
@@ -103,6 +107,54 @@ class DTNClient:
                 for burl in self._raw_bundles
             ]
         ]
+
+    def fetch_endpoint(self, endpoint: str = None) -> bytes:
+        if endpoint is None:
+            endpoint = self._nodeid
+        return rq.get(url=f"{self._host}:{self._port}{self.ENDPOINT_ENDPOINT}?{endpoint}").content
+
+    def download(
+        self,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        bundle_id: Optional[str] = None,
+        node_id: Optional[str] = None,
+        peer_name: Optional[str] = None,
+        time: Optional[int] = None,
+        seq: Optional[int] = None,
+    ) -> bytes:
+        if bundle_id is None:
+            if time is None or seq is None:
+                raise ValueError(
+                    "In absence of a bundle_id, time and sequence number must be provided."
+                )
+            if node_id is None:
+                if peer_name is None:
+                    node_id = self._nodeid
+                else:
+                    peers = self.peers
+                    if peer_name in peers.keys():
+                        node_id = f"dtn:{peers[peer_name]['eid'][1]}"
+                    else:
+                        raise ValueError("Peer not found")
+            else:
+                if node_id[-1] != "/":
+                    node_id = f"{node_id}/"
+            bundle_id = f"{node_id}-{time}-{seq}"
+
+        if host is None:
+            if port is None:
+                host = self._host
+                port = self._port
+            else:
+                raise ValueError("Host and port must either both be defined or undefined.")
+        else:
+            if not has_valid_schema(host):
+                raise ValueError("Host attribute must start either with 'http://' or 'https://'")
+            if host[-1] == "/":
+                host = host[:-1]
+
+        return rq.get(url=f"{host}:{port}{self.DOWNLOAD_ENDPOINT}?{bundle_id}").content
 
     @property
     def host(self) -> str:
