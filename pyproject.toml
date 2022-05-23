@@ -1,0 +1,66 @@
+[tool.poetry]
+name = "py-dtn7"
+version = "0.1.0"
+description = ""
+authors = ["Thomas Schmitt <t.e.schmitt@posteo.de>"]
+
+license = "AGPL-3.0-or-later"
+readme = "README.md"
+homepage = "https://github.com/teschmitt/py-dtn7"
+repository = "https://github.com/teschmitt/py-dtn7"
+keywords = []
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Communications",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+]
+include = [
+    "LICENSE",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+requests = "^2.27.1"
+cbor2 = "^5.4.3"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+flake8 = "^4.0.1"
+black = "^22.3.0"
+pre-commit = "^2.18.1"
+isort = "^5.10.1"
+
+[tool.black]
+include = '\.pyi?$'
+line-length = 100
+target-version = ["py36", "py37", "py38", "py39"]
+preview = true
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = 'black'
+multi_line_output = 3
+
+
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
