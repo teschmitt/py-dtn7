@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "py-dtn7"
-version = "0.1.0"
+version = "0.1.1-alpha.0"
 description = ""
 authors = ["Thomas Schmitt <t.e.schmitt@posteo.de>"]
 
@@ -34,6 +34,7 @@ flake8 = "^4.0.1"
 black = "^22.3.0"
 pre-commit = "^2.18.1"
 isort = "^5.10.1"
+jupyterlab = "^3.4.2"
 
 [tool.black]
 include = '\.pyi?$'
