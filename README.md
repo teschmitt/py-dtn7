@@ -1,5 +1,7 @@
 # py-dtn7
 
+[![Licence AGPL-3.0](https://img.shields.io/github/license/teschmitt/py-dtn7)](LICENSE)
+
 A Python library for the DTN7 REST API of [dtn7-rs](https://github.com/dtn7/dtn7-rs).
 
 ## Quickstart
