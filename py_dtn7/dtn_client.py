@@ -27,12 +27,13 @@ class DTNClient:
 
     def __init__(
         self,
-        host: str,
+        host: Optional[str] = None,
         port: Optional[int] = None,
-        endpoints: Optional[list[str]] = None,
     ):
         if port is None:
             port = 3000
+        if host is None:
+            host = "http://localhost"
 
         if has_valid_schema(host):
             self._host = host
@@ -40,8 +41,6 @@ class DTNClient:
             raise ValueError("Host attribute must start either with 'http://' or 'https://'")
 
         self._port = port
-        self._endpoints = endpoints if endpoints is not None else []
-
         self._nodeid = self._get_nodeid()
 
     def send(
@@ -166,7 +165,9 @@ class DTNClient:
 
     @property
     def endpoints(self) -> list:
-        return json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_EIDS}").content)
+        eps: list = json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_EIDS}").content)
+        # eps = list(map(lambda ep: ep.rsplit("/", 1)[1], eps))
+        return eps
 
     @property
     def bundles(self) -> list[dict]:
