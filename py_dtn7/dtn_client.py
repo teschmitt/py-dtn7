@@ -36,6 +36,8 @@ class DTNClient:
             host = "http://localhost"
 
         if has_valid_schema(host):
+            if host.endswith("/"):
+                host = host[:-1]
             self._host = host
         else:
             raise ValueError("Host attribute must start either with 'http://' or 'https://'")
