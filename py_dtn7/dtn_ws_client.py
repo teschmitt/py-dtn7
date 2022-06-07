@@ -3,7 +3,6 @@ from urllib import request as rq
 from typing import Optional, Any
 
 import cbor2 as cbor
-import rel
 import websocket
 
 
