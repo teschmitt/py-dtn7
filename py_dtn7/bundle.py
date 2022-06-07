@@ -10,7 +10,7 @@ class CRCTypeEnum(Enum):
     CRC32C = 2
 
 
-class _ProcCtrlFlags:
+class _BundleProcCtrlFlags:
     """
     4.2.3. Bundle Processing Control Flags
     Bundle processing control flags assert properties of the bundle as a whole rather than of any
@@ -30,13 +30,41 @@ class _ProcCtrlFlags:
 
     # Flags requesting types of status reports:
     # Request reporting of bundle reception
-    report_reception: bool = False
+    request_report_reception: bool = False
     # Request reporting of bundle forwarding
-    report_forwarding: bool = False
+    request_report_forwarding: bool = False
     # Request reporting of bundle delivery
-    report_delivery: bool = False
+    request_report_delivery: bool = False
     # Request reporting of bundle deletion
-    report_deletion: bool = False
+    request_report_deletion: bool = False
+
+    def __repr__(self):
+        res: int = 0
+        res += 1 if self.is_fragment else 0
+        res += 2 if self.payload_admin_rec else 0
+        res += 4 if self.no_fragment else 0
+        res += 32 if self.request_ack else 0
+        res += 64 if self.request_status_time else 0
+        res += 16384 if self.request_report_reception else 0
+        res += 65536 if self.request_report_forwarding else 0
+        res += 131072 if self.request_report_delivery else 0
+        res += 262144 if self.request_report_deletion else 0
+        return hex(res)
+
+
+class _BlockProcCtrlFlags:
+    must_be_replicated: bool = False
+    process_unable_status_report: bool = False
+    process_unable_delete: bool = False
+    process_unable_discard: bool = False
+
+    def __repr__(self):
+        res: int = 0
+        res += 1 if self.must_be_replicated else 0
+        res += 2 if self.process_unable_status_report else 0
+        res += 4 if self.process_unable_delete else 0
+        res += 16 if self.process_unable_discard else 0
+        return hex(res)
 
 
 class _Block(ABC):
@@ -44,23 +72,85 @@ class _Block(ABC):
 
 
 class _PrimaryBlock(_Block):
-    version: int = 0
-    control_flags: _ProcCtrlFlags = _ProcCtrlFlags()
-    crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC
-    destination_eid: str = ""
-    source_node_eid: str = ""
-    report_to_eid: str = ""
-    creation_timestamp: datetime = datetime.utcnow()
-    lifetime: int = 0
-    fragment_offset: int = 0
-    total_application_data_unit_length: int = 0
-    crc: str = ""
+    """
+    4.3.1. Primary Bundle Block
+
+       The primary bundle block contains the basic information needed to forward bundles to their
+       destinations.
+
+       Each primary block SHALL be represented as a CBOR array; the number of elements in the array
+       SHALL be 8 (if the bundle is not a fragment and the block has no CRC), 9 (if the block has a
+       CRC and the bundle is not a fragment), 10 (if the bundle is a fragment and the block has no
+       CRC), or 11 (if the bundle is a fragment and the block has a CRC).
+
+       The primary block of each bundle SHALL be immutable. The CBOR- encoded values of all fields
+       in the primary block MUST remain unchanged from the time the block is created to the time it
+       is delivered.
+
+       The fields of the primary bundle block SHALL be as follows, listed in the order in which
+       they MUST appear:
+    """
+
+    _version: int = 7
+    _bundle_proc_ctrl_flags: _BundleProcCtrlFlags = _BundleProcCtrlFlags()
+    _crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC
+    _destination_eid: str = ""
+    _source_node_eid: str = ""
+    _report_to_eid: str = ""
+    _creation_timestamp: datetime = datetime.utcnow()
+    _lifetime: int = 0
+    _fragment_offset: Optional[int]
+    _total_adu_length: int = 0
+    _crc: Optional[str]
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def bundle_proc_ctrl_flags(self):
+        return self._bundle_proc_ctrl_flags
+
+    @property
+    def crc_type(self):
+        return self._crc_type
+
+    @property
+    def destination_eid(self):
+        return self._destination_eid
+
+    @property
+    def source_node_eid(self):
+        return self._source_node_eid
+
+    @property
+    def creation_timestamp(self):
+        return self._creation_timestamp
+
+    @property
+    def lifetime(self):
+        return self._lifetime
+
+    @property
+    def fragment_offset(self):
+        return self._fragment_offset
+
+    @property
+    def total_adu_length(self):
+        return self._total_adu_length
+
+    def __repr__(self) -> str:
+        return (
+            f"<PrimaryBlock: [{self._version}, {self._bundle_proc_ctrl_flags},"
+            f' {self._crc_type.value}, "{self._destination_eid}", "{self._source_node_eid}",'
+            f' "{self._report_to_eid}", "{self._report_to_eid}"]>'
+        )
 
 
 class _CanonicalBlock(_Block, ABC):
     block_type: int = 0
     block_number: int = 0
-    control_flags: _ProcCtrlFlags = _ProcCtrlFlags()
+    block_proc_ctrl_flags: _BlockProcCtrlFlags = _BlockProcCtrlFlags()
     crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC
     data: bytes = b""
     crc: Optional[str] = None
@@ -117,7 +207,7 @@ class Bundle:
                 )
             self.extension_blocks.append(_HopCountBlock())
         elif 10 < block_type < 192:
-            raise ValueError("Block types 11 to 191 aur unassigned (RFC 9171, 9.1")
+            raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
         else:
             raise NotImplementedError(f"Block type {block_type} not yet supported.")
 
@@ -126,6 +216,6 @@ class Bundle:
             [isinstance(block, block_type) for block in self.canonical_blocks]
         )
 
-    def blocks(self) -> list[_Block]:
+    def __repr__(self) -> str:
         ret: list[_Block] = [self.primary_block]
-        return ret + self.canonical_blocks + self.extension_blocks
+        return str(ret + self.canonical_blocks + self.extension_blocks)
