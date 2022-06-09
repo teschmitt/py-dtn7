@@ -25,3 +25,7 @@ otherwise we use the complete URI:
 >>> r.content.decode("utf-8")
 'Sent payload with 27 bytes'
 ```
+
+## Documentation
+
+Use `pdoc` to generate the API docs or check out [py-dtn7.readthedocs.org](https://py-dtn7.readthedocs.org) 

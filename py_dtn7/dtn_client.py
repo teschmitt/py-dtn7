@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Union
+from typing import Optional, Union, ClassVar
 
 import cbor2 as cbor
 import requests as rq
@@ -13,17 +13,17 @@ def has_valid_schema(host: str):
 class DTNClient:
 
     # API endpoints
-    DOWNLOAD_ENDPOINT = "/download"
-    ENDPOINT_ENDPOINT = "/endpoint"
-    REGISTER_ENDPOINT = "/register"
-    SEND_ENDPOINT = "/send"
-    UNREGISTER_ENDPOINT = "/unregister"
-    STATUS_BUNDLES = "/status/bundles"
-    STATUS_EIDS = "/status/eids"
-    STATUS_INFO = "/status/info"
-    STATUS_NODEID = "/status/nodeid"
-    STATUS_PEERS = "/status/peers"
-    STATUS_STORE = "/status/store"
+    DOWNLOAD_ENDPOINT: ClassVar[str] = "/download"
+    ENDPOINT_ENDPOINT: ClassVar[str] = "/endpoint"
+    REGISTER_ENDPOINT: ClassVar[str] = "/register"
+    SEND_ENDPOINT: ClassVar[str] = "/send"
+    UNREGISTER_ENDPOINT: ClassVar[str] = "/unregister"
+    STATUS_BUNDLES: ClassVar[str] = "/status/bundles"
+    STATUS_EIDS: ClassVar[str] = "/status/eids"
+    STATUS_INFO: ClassVar[str] = "/status/info"
+    STATUS_NODEID: ClassVar[str] = "/status/nodeid"
+    STATUS_PEERS: ClassVar[str] = "/status/peers"
+    STATUS_STORE: ClassVar[str] = "/status/store"
 
     def __init__(
         self,
