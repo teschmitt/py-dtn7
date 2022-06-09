@@ -10,7 +10,7 @@ def has_valid_schema(host: str):
     return host.startswith("https://") or host.startswith("http://")
 
 
-class DTNClient:
+class DTNRESTClient:
 
     # API endpoints
     DOWNLOAD_ENDPOINT: ClassVar[str] = "/download"

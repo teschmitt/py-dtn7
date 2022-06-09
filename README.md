@@ -2,13 +2,13 @@
 
 [![Licence AGPL-3.0](https://img.shields.io/github/license/teschmitt/py-dtn7)](LICENSE)
 
-A Python library for the DTN7 REST API of [dtn7-rs](https://github.com/dtn7/dtn7-rs).
+A Python library for the DTN7 REST and WebSocket API of [dtn7-rs](https://github.com/dtn7/dtn7-rs).
 
 ## Quickstart
 
 ```pycon
->>> from py_dtn7 import DTNClient
->>> client = DTNClient(host="http://localhost", port=3000)
+>>> from py_dtn7 import DTNRESTClient
+>>> client = DTNRESTClient(host="http://localhost", port=3000)
 >>> d.peers
 {'box1': {'eid': [1, '//box1/'], 'addr': {'Ip': '10.0.0.42'}, 'con_type': 'Dynamic', 'period': None, 'cla_list': [['MtcpConvergenceLayer', 16162]], 'services': {}, 'last_contact': 1653316457}}
 >>> d.info
