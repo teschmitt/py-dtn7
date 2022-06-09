@@ -1,8 +1,9 @@
+from base64 import b64decode, b64encode
 import json
 from enum import Enum
 from urllib import request as rq
 from typing import Optional, Any, Callable, ClassVar, Union
-
+import toml
 import cbor2 as cbor
 from websocket import WebSocket, WebSocketApp, ABNF
 
@@ -17,11 +18,6 @@ def _rq_get(url: str) -> Any:
     return rq.urlopen(url=url)
 
 
-def _log(msg: str) -> None:
-    with open("msgs.log", "a+") as f:
-        f.write(f"{msg}\n")
-
-
 class WSMode(Enum):
     DATA_MODE = 0
     JSON_MODE = 1
@@ -34,11 +30,11 @@ class DTNWSClient:
     _WS_BASE: ClassVar[str] = "/ws"
     # returns the node id of the local instance
     _NODE_ID_ENDPOINT: ClassVar[str] = "/node"
-    # receive incoming bundles for this endpoint via the current websocket. NOTE: the endpoint must be already
-    # registered to subscribe to it!
+    # receive incoming bundles for this endpoint via the current websocket.
+    # NOTE: the endpoint must be already registered to subscribe to it!
     _SUBSCRIBE_ENDPOINT: ClassVar[str] = "/subscribe"
-    # stop receiving bundles for the given endpoint on this websocket connection. NOTE: They are still collected on the
-    # node itself unless the endpoint is also unregistered!
+    # stop receiving bundles for the given endpoint on this websocket connection.
+    # NOTE: They are still collected on the node itself unless the endpoint is also unregistered!
     _UNSUBSCRIBE_ENDPOINT: ClassVar[str] = "/unsubscribe"
     # put this websocket into cbor data mode.
     _DATA_MODE: ClassVar[str] = "/data"
@@ -142,15 +138,21 @@ class DTNWSClient:
             "data": data,
         }
 
-        payload: Union[bytes | str]
+        payload: bytes
         if self._mode == WSMode.DATA_MODE:
             payload = cbor.dumps(bundle_dict)
         else:
-            payload = json.dumps(bundle_dict)
+            try:
+                # encode in base64 and translate to str equivalent according to spec:
+                # https://github.com/dtn7/dtn7-rs/blob/9b166/doc/http-client-api.md
+                bundle_dict["data"] = b64encode(bundle_dict["data"]).decode("utf-8")
+            except TypeError as e:
+                raise TypeError(f"Argument data must be of type 'bytes': {e}")
+            json_str = json.dumps(bundle_dict)
+            payload = json_str.encode()
         self._ws.send(payload, opcode=ABNF.OPCODE_BINARY)
 
     def subscribe(self, endpoint: str):
-        _log(f"SUBSCRIBE command received: {self._SUBSCRIBE_ENDPOINT} {endpoint}")
         self._ws.send(data=f"{self._SUBSCRIBE_ENDPOINT} {endpoint}")
 
     def _on_open(self, ws: WebSocketApp) -> None:
