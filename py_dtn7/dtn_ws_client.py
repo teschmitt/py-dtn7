@@ -1,10 +1,10 @@
 import json
 from enum import Enum
 from urllib import request as rq
-from typing import Optional, Any, Callable, ClassVar
+from typing import Optional, Any, Callable, ClassVar, Union
 
 import cbor2 as cbor
-from websocket import WebSocketApp
+from websocket import WebSocket, WebSocketApp, ABNF
 
 from py_dtn7 import Bundle
 
@@ -22,18 +22,18 @@ def _log(msg: str) -> None:
         f.write(f"{msg}\n")
 
 
-class ModeEnum(Enum):
-    DATA_MODE = "Data Mode"
-    JSON_MODE = "JSON Mode"
+class WSMode(Enum):
+    DATA_MODE = 0
+    JSON_MODE = 1
 
 
 class DTNWSClient:
-    """ WebSocket Client connecting to a running dtnd instance"""
+    """WebSocket Client connecting to a running dtnd instance"""
 
     # base ws endpoint URL
     _WS_BASE: ClassVar[str] = "/ws"
     # returns the node id of the local instance
-    _NODE_ENDPOINT: ClassVar[str] = "/node"
+    _NODE_ID_ENDPOINT: ClassVar[str] = "/node"
     # receive incoming bundles for this endpoint via the current websocket. NOTE: the endpoint must be already
     # registered to subscribe to it!
     _SUBSCRIBE_ENDPOINT: ClassVar[str] = "/subscribe"
@@ -52,7 +52,7 @@ class DTNWSClient:
     _callback: Callable[[Bundle | str], Any]
     _ws_base_url: str
     _endpoints: list[str]
-    _mode: ModeEnum
+    _mode: WSMode
     _ws: WebSocketApp
 
     def __init__(
@@ -61,7 +61,7 @@ class DTNWSClient:
         host: Optional[str] = None,
         port: Optional[str] = None,
         ws_base_url: Optional[str] = None,
-        endpoints: Optional[list[str]] = None
+        endpoints: Optional[list[str]] = None,
     ):
         """
 
@@ -85,12 +85,13 @@ class DTNWSClient:
         else:
             raise ValueError("Host attribute must start either with 'ws://' or 'wss://'")
 
-        self._callback: Callable[[Bundle | str], Any] = callback
-        self._port: str = port
-        self._ws_base_url: str = ws_base_url
-        self._endpoints: list[str] = endpoints
-        self._mode: ModeEnum = ModeEnum.DATA_MODE
-        self._ws: WebSocketApp  = WebSocketApp(
+        self._callback = callback
+        self._port = port
+        self._ws_base_url = ws_base_url
+        self._endpoints = endpoints
+        self._mode = WSMode.DATA_MODE
+        self._node_id = self._get_node_id()
+        self._ws: WebSocketApp = WebSocketApp(
             f"{self._host}:{self._port}{self._ws_base_url}",
             on_open=self._on_open,
             on_message=self._on_message,
@@ -106,12 +107,47 @@ class DTNWSClient:
             pass
         self._ws.close()
 
-    def node_id(self) -> None:
-        self._ws.send(data=self._NODE_ENDPOINT)
+    @property
+    def node_id(self) -> str:
+        return self._node_id
 
     @property
-    def mode(self) -> ModeEnum:
+    def mode(self) -> WSMode:
         return self._mode
+
+    @mode.setter
+    def mode(self, val: WSMode) -> None:
+        if val == WSMode.DATA_MODE and self._mode != WSMode.DATA_MODE:
+            self._ws.send(data=self._DATA_MODE)
+        elif val == WSMode.JSON_MODE and self._mode != WSMode.JSON_MODE:
+            self._ws.send(data=self._JSON_MODE)
+        self._mode = val
+
+    def send_data(
+        self,
+        destination: str,
+        data: bytes,
+        source: Optional[str] = None,
+        delivery_notification: bool = False,
+        lifetime: int = 24 * 3600 * 1000,
+    ):
+        if source is None:
+            source = self._node_id
+
+        bundle_dict: dict = {
+            "src": source,
+            "dst": destination,
+            "delivery_notification": delivery_notification,
+            "lifetime": lifetime,
+            "data": data,
+        }
+
+        payload: Union[bytes | str]
+        if self._mode == WSMode.DATA_MODE:
+            payload = cbor.dumps(bundle_dict)
+        else:
+            payload = json.dumps(bundle_dict)
+        self._ws.send(payload, opcode=ABNF.OPCODE_BINARY)
 
     def subscribe(self, endpoint: str):
         _log(f"SUBSCRIBE command received: {self._SUBSCRIBE_ENDPOINT} {endpoint}")
@@ -120,7 +156,7 @@ class DTNWSClient:
     def _on_open(self, ws: WebSocketApp) -> None:
         print("Connected")
         print(ws)
-        self._ws.send(data=self._JSON_MODE)
+        self._ws.send(data=self._DATA_MODE)
         for eid in self._endpoints:
             ws.send(data=f"{self._SUBSCRIBE_ENDPOINT} {eid}")
 
@@ -136,3 +172,15 @@ class DTNWSClient:
     def _on_close(self, ws: WebSocketApp, status_code, msg) -> None:
         print(f"{status_code=}, {msg=}")
         print("Connection closed")
+
+    def _get_node_id(self) -> str:
+        short_ws: WebSocket = WebSocket()
+        short_ws.connect(
+            url=f"{self._host}:{self._port}{self._ws_base_url}",
+        )
+        short_ws.send(self._NODE_ID_ENDPOINT)
+        resp: str = short_ws.recv()
+        if not resp.startswith("200 node:"):
+            raise RuntimeError("Node ID could not be determined.")
+        short_ws.close()
+        return resp.split(":", maxsplit=1)[1].strip()
