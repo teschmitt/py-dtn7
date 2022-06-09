@@ -148,7 +148,7 @@ class _PrimaryBlock(_Block):
 
 
 class _CanonicalBlock(_Block, ABC):
-    block_type: int = 0
+    block_type: int = -1
     block_number: int = 0
     block_proc_ctrl_flags: _BlockProcCtrlFlags = _BlockProcCtrlFlags()
     crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC
@@ -161,7 +161,7 @@ class _PayloadBlock(_CanonicalBlock):
 
 
 class _ExtensionBlock(_Block, ABC):
-    block_type: int = 0
+    block_type: int = -1
 
 
 class _PreviousNodeBlock(_ExtensionBlock):
