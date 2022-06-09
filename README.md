@@ -28,4 +28,4 @@ otherwise we use the complete URI:
 
 ## Documentation
 
-Use `pdoc` to generate the API docs or check out [py-dtn7.readthedocs.org](https://py-dtn7.readthedocs.org) 
+Use `pdoc` to generate the API docs or check out [py-dtn7.readthedocs.org](https://py-dtn7.readthedocs.org)

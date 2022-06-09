@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Union, ClassVar
+from typing import ClassVar, Optional, Union
 
 import cbor2 as cbor
 import requests as rq

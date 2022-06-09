@@ -1,11 +1,11 @@
-from base64 import b64decode, b64encode
 import json
+from base64 import b64encode
 from enum import Enum
+from typing import Any, Callable, ClassVar, Optional
 from urllib import request as rq
-from typing import Optional, Any, Callable, ClassVar, Union
-import toml
+
 import cbor2 as cbor
-from websocket import WebSocket, WebSocketApp, ABNF
+from websocket import ABNF, WebSocket, WebSocketApp
 
 from py_dtn7 import Bundle
 
