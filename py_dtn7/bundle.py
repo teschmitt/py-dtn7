@@ -18,25 +18,37 @@ class _BundleProcCtrlFlags:
     """
 
     # The bundle is a fragment
-    is_fragment: bool = False
+    is_fragment: bool
     # The bundle's payload is an administrative record
-    payload_admin_rec: bool = False
+    payload_admin_rec: bool
     # The bundle must not be fragmented
-    no_fragment: bool = False
+    no_fragment: bool
     # Acknowledgment by the user application is requested
-    request_ack: bool = False
+    request_ack: bool
     # Status time is requested in all status reports
-    request_status_time: bool = False
+    request_status_time: bool
 
     # Flags requesting types of status reports:
     # Request reporting of bundle reception
-    request_report_reception: bool = False
+    request_report_reception: bool
     # Request reporting of bundle forwarding
-    request_report_forwarding: bool = False
+    request_report_forwarding: bool
     # Request reporting of bundle delivery
-    request_report_delivery: bool = False
+    request_report_delivery: bool
     # Request reporting of bundle deletion
-    request_report_deletion: bool = False
+    request_report_deletion: bool
+
+    def __init__(self):
+        self.is_fragment = False
+        self.payload_admin_rec = False
+        self.no_fragment = False
+        self.request_ack = False
+        self.request_status_time = False
+
+        self.request_report_reception = False
+        self.request_report_forwarding = False
+        self.request_report_delivery = False
+        self.request_report_deletion = False
 
     def __repr__(self):
         res: int = 0
@@ -53,10 +65,16 @@ class _BundleProcCtrlFlags:
 
 
 class _BlockProcCtrlFlags:
-    must_be_replicated: bool = False
-    process_unable_status_report: bool = False
-    process_unable_delete: bool = False
-    process_unable_discard: bool = False
+    must_be_replicated: bool
+    process_unable_status_report: bool
+    process_unable_delete: bool
+    process_unable_discard: bool
+
+    def __init__(self):
+        self.must_be_replicated = False
+        self.process_unable_status_report = False
+        self.process_unable_delete = False
+        self.process_unable_discard = False
 
     def __repr__(self):
         res: int = 0
@@ -91,17 +109,36 @@ class _PrimaryBlock(_Block):
        they MUST appear:
     """
 
-    _version: int = 7
-    _bundle_proc_ctrl_flags: _BundleProcCtrlFlags = _BundleProcCtrlFlags()
-    _crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC
-    _destination_eid: str = ""
-    _source_node_eid: str = ""
-    _report_to_eid: str = ""
-    _creation_timestamp: datetime = datetime.utcnow()
-    _lifetime: int = 0
+    _version: int
+    _bundle_proc_ctrl_flags: _BundleProcCtrlFlags
+    _crc_type: CRCTypeEnum
+    _destination: str
+    _source: str
+    _report_to: str
+    _creation_timestamp: datetime
+    _lifetime: int
     _fragment_offset: Optional[int]
-    _total_adu_length: int = 0
+    _total_adu_length: int
     _crc: Optional[str]
+
+    def __init__(
+        self,
+        destination: str,
+        source: str,
+        report_to: Optional[str] = None,
+        lifetime: int = 1000 * 3600 * 24,
+    ):
+        self._version = 7
+        self._bundle_proc_ctrl_flags = _BundleProcCtrlFlags()
+        self._crc_type = CRCTypeEnum.NOCRC
+        self._destination = destination
+        self._source = source
+        self._report_to = source if report_to is None else report_to
+        self._creation_timestamp = datetime.utcnow()
+        self._lifetime = lifetime
+        self._fragment_offset = None
+        self._total_adu_length = 0
+        self._crc = None
 
     @property
     def version(self):
@@ -117,11 +154,11 @@ class _PrimaryBlock(_Block):
 
     @property
     def destination_eid(self):
-        return self._destination_eid
+        return self._destination
 
     @property
     def source_node_eid(self):
-        return self._source_node_eid
+        return self._source
 
     @property
     def creation_timestamp(self):
@@ -142,8 +179,8 @@ class _PrimaryBlock(_Block):
     def __repr__(self) -> str:
         return (
             f"<PrimaryBlock: [{self._version}, {self._bundle_proc_ctrl_flags},"
-            f' {self._crc_type.value}, "{self._destination_eid}", "{self._source_node_eid}",'
-            f' "{self._report_to_eid}", "{self._report_to_eid}"]>'
+            f' {self._crc_type.value}, "{self._destination}", "{self._source}",'
+            f' "{self._report_to}", "{self._report_to}"]>'
         )
 
 
@@ -160,21 +197,17 @@ class _PayloadBlock(_CanonicalBlock):
     block_type = 1
 
 
-class _ExtensionBlock(_Block, ABC):
-    block_type: int = -1
-
-
-class _PreviousNodeBlock(_ExtensionBlock):
+class _PreviousNodeBlock(_CanonicalBlock):
     block_type = 6
     forwarder_id: str = ""
 
 
-class _BundleAgeBlock(_ExtensionBlock):
+class _BundleAgeBlock(_CanonicalBlock):
     block_type = 7
     age: int = 0
 
 
-class _HopCountBlock(_ExtensionBlock):
+class _HopCountBlock(_CanonicalBlock):
     block_type = 10
     hop_limit: int = 0
     hop_count: int = 0
@@ -183,7 +216,13 @@ class _HopCountBlock(_ExtensionBlock):
 class Bundle:
     primary_block: _PrimaryBlock = _PrimaryBlock()
     canonical_blocks: list[_CanonicalBlock] = [_PayloadBlock()]
-    extension_blocks: list[_ExtensionBlock] = []
+
+    def __init__(self, data: Optional[bytes]):
+        """
+
+        :param data: bundle data as CBOR encoded object
+        """
+        pass
 
     def add_block_type(self, block_type: int):
         if block_type == 1:
@@ -193,29 +232,27 @@ class Bundle:
                 raise ValueError(
                     "Only exactly 1 previous node block allowed in bundle (RFC 9171, 4.4.1)"
                 )
-            self.extension_blocks.append(_PreviousNodeBlock())
+            self.canonical_blocks.append(_PreviousNodeBlock())
         elif block_type == 7:
             if self._has_block(_BundleAgeBlock):
                 raise ValueError(
                     "Only exactly 1 bundle age block allowed in bundle (RFC 9171, 4.4.2)"
                 )
-            self.extension_blocks.append(_BundleAgeBlock())
+            self.canonical_blocks.append(_BundleAgeBlock())
         elif block_type == 10:
             if self._has_block(_HopCountBlock):
                 raise ValueError(
                     "Only exactly 1 hop-count block allowed in bundle (RFC 9171, 4.4.3)"
                 )
-            self.extension_blocks.append(_HopCountBlock())
+            self.canonical_blocks.append(_HopCountBlock())
         elif 10 < block_type < 192:
             raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
         else:
             raise NotImplementedError(f"Block type {block_type} not yet supported.")
 
-    def _has_block(self, block_type: Type[_CanonicalBlock | _ExtensionBlock]):
-        return any([isinstance(block, block_type) for block in self.extension_blocks]) or any(
-            [isinstance(block, block_type) for block in self.canonical_blocks]
-        )
+    def _has_block(self, block_type: Type[_CanonicalBlock]):
+        return any([isinstance(block, block_type) for block in self.canonical_blocks])
 
     def __repr__(self) -> str:
         ret: list[_Block] = [self.primary_block]
-        return str(ret + self.canonical_blocks + self.extension_blocks)
+        return str(ret + self.canonical_blocks)
