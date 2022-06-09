@@ -3,6 +3,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, Type
 
+import cbor2
+
 
 class CRCTypeEnum(Enum):
     NOCRC = 0
@@ -38,29 +40,36 @@ class _BundleProcCtrlFlags:
     # Request reporting of bundle deletion
     request_report_deletion: bool
 
-    def __init__(self):
-        self.is_fragment = False
-        self.payload_admin_rec = False
-        self.no_fragment = False
-        self.request_ack = False
-        self.request_status_time = False
+    def __init__(self, flags: int):
+        self.request_report_deletion = bool(flags // 262144)
+        flags %= 262144
+        self.request_report_delivery = bool(flags // 131072)
+        flags %= 131072
+        self.request_report_forwarding = bool(flags // 65536)
+        flags %= 65536
+        self.request_report_reception = bool(flags // 16384)
+        flags %= 16384
 
-        self.request_report_reception = False
-        self.request_report_forwarding = False
-        self.request_report_delivery = False
-        self.request_report_deletion = False
+        self.request_status_time = bool(flags // 64)
+        flags %= 64
+        self.request_ack = bool(flags // 32)
+        flags %= 32
+        self.no_fragment = bool(flags // 4)
+        flags %= 4
+        self.payload_admin_rec = bool(flags // 2)
+        flags %= 2
+        self.is_fragment = bool(flags // 1)
 
     def __repr__(self):
-        res: int = 0
-        res += 1 if self.is_fragment else 0
-        res += 2 if self.payload_admin_rec else 0
-        res += 4 if self.no_fragment else 0
-        res += 32 if self.request_ack else 0
-        res += 64 if self.request_status_time else 0
-        res += 16384 if self.request_report_reception else 0
-        res += 65536 if self.request_report_forwarding else 0
-        res += 131072 if self.request_report_delivery else 0
-        res += 262144 if self.request_report_deletion else 0
+        res: int = 1 * self.is_fragment
+        res += 2 * self.payload_admin_rec
+        res += 4 * self.no_fragment
+        res += 32 * self.request_ack
+        res += 64 * self.request_status_time
+        res += 16384 * self.request_report_reception
+        res += 65536 * self.request_report_forwarding
+        res += 131072 * self.request_report_delivery
+        res += 262144 * self.request_report_deletion
         return hex(res)
 
 
@@ -77,11 +86,10 @@ class _BlockProcCtrlFlags:
         self.process_unable_discard = False
 
     def __repr__(self):
-        res: int = 0
-        res += 1 if self.must_be_replicated else 0
-        res += 2 if self.process_unable_status_report else 0
-        res += 4 if self.process_unable_delete else 0
-        res += 16 if self.process_unable_discard else 0
+        res: int = 1 * self.must_be_replicated
+        res += 2 * self.process_unable_status_report
+        res += 4 * self.process_unable_delete
+        res += 16 * self.process_unable_discard
         return hex(res)
 
 
@@ -125,11 +133,12 @@ class _PrimaryBlock(_Block):
         self,
         destination: str,
         source: str,
+        bundle_proc_control_flags: _BundleProcCtrlFlags,
         report_to: Optional[str] = None,
         lifetime: int = 1000 * 3600 * 24,
     ):
         self._version = 7
-        self._bundle_proc_ctrl_flags = _BundleProcCtrlFlags()
+        self._bundle_proc_ctrl_flags = bundle_proc_control_flags
         self._crc_type = CRCTypeEnum.NOCRC
         self._destination = destination
         self._source = source
@@ -153,11 +162,11 @@ class _PrimaryBlock(_Block):
         return self._crc_type
 
     @property
-    def destination_eid(self):
+    def destination(self):
         return self._destination
 
     @property
-    def source_node_eid(self):
+    def source(self):
         return self._source
 
     @property
@@ -214,15 +223,45 @@ class _HopCountBlock(_CanonicalBlock):
 
 
 class Bundle:
-    primary_block: _PrimaryBlock = _PrimaryBlock()
-    canonical_blocks: list[_CanonicalBlock] = [_PayloadBlock()]
+    primary_block: _PrimaryBlock
+    canonical_blocks: list[_CanonicalBlock]
 
     def __init__(self, data: Optional[bytes]):
         """
 
         :param data: bundle data as CBOR encoded object
         """
-        pass
+
+        self._data: bytes = data
+
+        """ RFC 9171, 4.1
+        […] The first block in the sequence (the first item of the array) MUST be a primary bundle
+        block in CBOR encoding as described below; the bundle MUST have exactly one primary bundle
+        block. […] Every block following the primary block SHALL be the CBOR encoding of a canonical
+        block. The last such block MUST be a payload block; the bundle MUST have exactly one payload
+        block.
+        """
+        blocks: list[list] = cbor2.loads(self._data)
+        primary_block_data: list = blocks[0]
+        payload_block_data: list = blocks[-1]  # noqa F841
+        print(f"{primary_block_data=}")
+        bpcf: int = primary_block_data[1]
+        crc_type: int = primary_block_data[2]  # noqa F841
+        dst: str = primary_block_data[3][1]
+        src: str = primary_block_data[4][1]
+        rpt: str = primary_block_data[5][1]
+        tst: int = primary_block_data[6][0]  # noqa F841
+        seq: int = primary_block_data[6][1]  # noqa F841
+        lft: int = primary_block_data[7]
+
+        self.primary_block = _PrimaryBlock(
+            source=src,
+            destination=dst,
+            bundle_proc_control_flags=_BundleProcCtrlFlags(bpcf),
+            report_to=rpt,
+            lifetime=lft,
+        )
+        self.canonical_blocks = [_PayloadBlock()]
 
     def add_block_type(self, block_type: int):
         if block_type == 1:
