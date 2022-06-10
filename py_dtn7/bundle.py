@@ -1,9 +1,15 @@
+# for postponed evaluation of annotation of Bundle.from_cbor()
+# more info: https://stackoverflow.com/a/33533514
+from __future__ import annotations
+
 from abc import ABC
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional, Type
 
 import cbor2
+
+REF_DT = datetime(year=2000, month=1, day=1, hour=0, minute=0, second=0)
 
 
 class CRCTypeEnum(Enum):
@@ -123,7 +129,9 @@ class _PrimaryBlock(_Block):
     _destination: str
     _source: str
     _report_to: str
-    _creation_timestamp: datetime
+    _timestamp: int
+    _datetime: datetime
+    _sequence_number: int
     _lifetime: int
     _fragment_offset: Optional[int]
     _total_adu_length: int
@@ -134,6 +142,8 @@ class _PrimaryBlock(_Block):
         destination: str,
         source: str,
         bundle_proc_control_flags: _BundleProcCtrlFlags,
+        timestamp: int,
+        sequence_number: int,
         report_to: Optional[str] = None,
         lifetime: int = 1000 * 3600 * 24,
     ):
@@ -143,7 +153,9 @@ class _PrimaryBlock(_Block):
         self._destination = destination
         self._source = source
         self._report_to = source if report_to is None else report_to
-        self._creation_timestamp = datetime.utcnow()
+        self._timestamp = timestamp
+        self._datetime = REF_DT + timedelta(milliseconds=timestamp)
+        self._sequence_number = sequence_number
         self._lifetime = lifetime
         self._fragment_offset = None
         self._total_adu_length = 0
@@ -226,13 +238,35 @@ class Bundle:
     primary_block: _PrimaryBlock
     canonical_blocks: list[_CanonicalBlock]
 
-    def __init__(self, data: Optional[bytes]):
+    def __init__(
+        self,
+        source: str,
+        destination: str,
+        bundle_proc_control_flags: int,
+        timestamp: int,
+        sequence_number: int,
+        report_to: str,
+        lifetime: int,
+        data: bytes,
+    ):
+        self._data: bytes = data
+        self.primary_block = _PrimaryBlock(
+            source=source,
+            destination=destination,
+            bundle_proc_control_flags=_BundleProcCtrlFlags(bundle_proc_control_flags),
+            timestamp=timestamp,
+            sequence_number=sequence_number,
+            report_to=report_to,
+            lifetime=lifetime,
+        )
+        self.canonical_blocks = [_PayloadBlock()]
+
+    @staticmethod
+    def from_cbor(data: Optional[bytes]) -> Bundle:
         """
 
         :param data: bundle data as CBOR encoded object
         """
-
-        self._data: bytes = data
 
         """ RFC 9171, 4.1
         […] The first block in the sequence (the first item of the array) MUST be a primary bundle
@@ -241,27 +275,28 @@ class Bundle:
         block. The last such block MUST be a payload block; the bundle MUST have exactly one payload
         block.
         """
-        blocks: list[list] = cbor2.loads(self._data)
+        blocks: list[list] = cbor2.loads(data)
         primary_block_data: list = blocks[0]
         payload_block_data: list = blocks[-1]  # noqa F841
-        print(f"{primary_block_data=}")
+
         bpcf: int = primary_block_data[1]
         crc_type: int = primary_block_data[2]  # noqa F841
         dst: str = primary_block_data[3][1]
         src: str = primary_block_data[4][1]
         rpt: str = primary_block_data[5][1]
-        tst: int = primary_block_data[6][0]  # noqa F841
-        seq: int = primary_block_data[6][1]  # noqa F841
+        tst: int = primary_block_data[6][0]
+        seq: int = primary_block_data[6][1]
         lft: int = primary_block_data[7]
-
-        self.primary_block = _PrimaryBlock(
+        return Bundle(
             source=src,
             destination=dst,
-            bundle_proc_control_flags=_BundleProcCtrlFlags(bpcf),
+            bundle_proc_control_flags=bpcf,
+            timestamp=tst,
+            sequence_number=seq,
             report_to=rpt,
             lifetime=lft,
+            data=data,
         )
-        self.canonical_blocks = [_PayloadBlock()]
 
     def add_block_type(self, block_type: int):
         if block_type == 1:
