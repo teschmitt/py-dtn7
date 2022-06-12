@@ -46,7 +46,10 @@ class _BundleProcCtrlFlags:
     # Request reporting of bundle deletion
     request_report_deletion: bool
 
+    init_flags: int
+
     def __init__(self, flags: int):
+        self.init_flags = flags
         self.request_report_deletion = bool(flags // 262144)
         flags %= 262144
         self.request_report_delivery = bool(flags // 131072)
@@ -64,7 +67,7 @@ class _BundleProcCtrlFlags:
         flags %= 4
         self.payload_admin_rec = bool(flags // 2)
         flags %= 2
-        self.is_fragment = bool(flags // 1)
+        self.is_fragment = bool(flags)
 
     def __repr__(self):
         res: int = 1 * self.is_fragment
@@ -85,11 +88,17 @@ class _BlockProcCtrlFlags:
     process_unable_delete: bool
     process_unable_discard: bool
 
-    def __init__(self):
-        self.must_be_replicated = False
-        self.process_unable_status_report = False
-        self.process_unable_delete = False
-        self.process_unable_discard = False
+    init_flags: int
+
+    def __init__(self, flags: int):
+        self.init_flags = flags
+        self.process_unable_discard = bool(flags // 16)
+        flags %= 16
+        self.process_unable_delete = bool(flags // 4)
+        flags %= 4
+        self.process_unable_status_report = bool(flags // 2)
+        flags %= 2
+        self.must_be_replicated = bool(flags)
 
     def __repr__(self):
         res: int = 1 * self.must_be_replicated
@@ -200,36 +209,90 @@ class _PrimaryBlock(_Block):
     def __repr__(self) -> str:
         return (
             f"<PrimaryBlock: [{self._version}, {self._bundle_proc_ctrl_flags},"
-            f' {self._crc_type.value}, "{self._destination}", "{self._source}",'
-            f' "{self._report_to}", "{self._report_to}"]>'
+            f' {self._crc_type.name}, "{self._destination}", "{self._source}",'
+            f' "{self._report_to}", "{self._report_to}, {self._datetime.isoformat()}"]>'
         )
 
 
 class _CanonicalBlock(_Block, ABC):
-    block_type: int = -1
-    block_number: int = 0
-    block_proc_ctrl_flags: _BlockProcCtrlFlags = _BlockProcCtrlFlags()
-    crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC
-    data: bytes = b""
-    crc: Optional[str] = None
+    _block_type: int
+    _block_number: int
+    _block_proc_ctrl_flags: _BlockProcCtrlFlags
+    _crc_type: CRCTypeEnum
+    _data: bytes
+    _crc: Optional[str]
+
+    def __init__(
+        self,
+        block_proc_control_flags: _BlockProcCtrlFlags,
+        data: bytes,
+        block_number: int = 0,
+        crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC,
+        crc: Optional[str] = None,
+    ):
+        self._block_type = -1
+        self._block_number = block_number
+        self._block_proc_ctrl_flags = block_proc_control_flags
+        self._crc_type = crc_type
+        self._data = data
+        self._crc = crc
+
+    @property
+    def block_type(self) -> int:
+        return self._block_type
+
+    @property
+    def block_number(self) -> int:
+        return self._block_number
+
+    @property
+    def block_proc_ctrl_flags(self) -> _BlockProcCtrlFlags:
+        return self._block_proc_ctrl_flags
+
+    @property
+    def crc_type(self) -> CRCTypeEnum:
+        return self._crc_type
+
+    @property
+    def data(self) -> bytes:
+        return self._data
+
+    @property
+    def crc(self) -> Optional[str]:
+        return self._crc
+
+    def __repr__(self) -> str:
+        return (
+            f"<{self.__class__.__name__}: [{self._block_number}, {self._block_proc_ctrl_flags},"
+            f" {self._crc_type.name}, {self._data}>"
+        )
 
 
 class _PayloadBlock(_CanonicalBlock):
-    block_type = 1
+    def __init__(
+        self,
+        block_proc_control_flags: _BlockProcCtrlFlags,
+        data: bytes,
+        block_number: int = 0,
+        crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC,
+        crc: Optional[str] = None,
+    ):
+        super().__init__(block_proc_control_flags, data, block_number, crc_type, crc)
+        self._block_type = 1
 
 
 class _PreviousNodeBlock(_CanonicalBlock):
-    block_type = 6
+    _block_type = 6
     forwarder_id: str = ""
 
 
 class _BundleAgeBlock(_CanonicalBlock):
-    block_type = 7
+    _block_type = 7
     age: int = 0
 
 
 class _HopCountBlock(_CanonicalBlock):
-    block_type = 10
+    _block_type = 10
     hop_limit: int = 0
     hop_count: int = 0
 
@@ -240,32 +303,20 @@ class Bundle:
 
     def __init__(
         self,
-        source: str,
-        destination: str,
-        bundle_proc_control_flags: int,
-        timestamp: int,
-        sequence_number: int,
-        report_to: str,
-        lifetime: int,
-        data: bytes,
+        primary_block: _PrimaryBlock,
+        canonical_blocks: list[_CanonicalBlock],
+        data: Optional[bytes] = None,
     ):
         self._data: bytes = data
-        self.primary_block = _PrimaryBlock(
-            source=source,
-            destination=destination,
-            bundle_proc_control_flags=_BundleProcCtrlFlags(bundle_proc_control_flags),
-            timestamp=timestamp,
-            sequence_number=sequence_number,
-            report_to=report_to,
-            lifetime=lifetime,
-        )
-        self.canonical_blocks = [_PayloadBlock()]
+        self.primary_block = primary_block
+        self.canonical_blocks = canonical_blocks
 
     @staticmethod
     def from_cbor(data: Optional[bytes]) -> Bundle:
         """
-
+        Create a new Bundle object from valid CBOR data
         :param data: bundle data as CBOR encoded object
+        :return: a bundle object constructed from the passed data
         """
 
         """ RFC 9171, 4.1
@@ -279,23 +330,62 @@ class Bundle:
         primary_block_data: list = blocks[0]
         payload_block_data: list = blocks[-1]  # noqa F841
 
-        bpcf: int = primary_block_data[1]
-        crc_type: int = primary_block_data[2]  # noqa F841
-        dst: str = primary_block_data[3][1]
-        src: str = primary_block_data[4][1]
-        rpt: str = primary_block_data[5][1]
-        tst: int = primary_block_data[6][0]
-        seq: int = primary_block_data[6][1]
-        lft: int = primary_block_data[7]
-        return Bundle(
+        # parse primary block
+        try:
+            bpcf: int = primary_block_data[1]
+            crct: int = primary_block_data[2]  # noqa F841
+            dst: str = primary_block_data[3][1]
+            src: str = primary_block_data[4][1]
+            rpt: str = primary_block_data[5][1]
+            tst: int = primary_block_data[6][0]
+            seq: int = primary_block_data[6][1]
+            lft: int = primary_block_data[7]
+        except IndexError as e:
+            raise IndexError(f"Passed CBOR data is not a valid bundle: {e}")
+
+        prim_blk: _PrimaryBlock = _PrimaryBlock(
             source=src,
             destination=dst,
-            bundle_proc_control_flags=bpcf,
+            bundle_proc_control_flags=_BundleProcCtrlFlags(bpcf),
             timestamp=tst,
             sequence_number=seq,
             report_to=rpt,
             lifetime=lft,
+        )
+
+        # parse payload block
+        try:
+            blnr: int = payload_block_data[1]
+            bpcf: int = payload_block_data[2]
+            crct: int = payload_block_data[3]  # noqa F841
+            data: bytes = payload_block_data[4]
+            crc: Optional[str] = None  # noqa F841
+        except IndexError as e:
+            raise IndexError(f"Passed CBOR data is not a valid bundle: {e}")
+
+        pld_blk: _PayloadBlock = _PayloadBlock(
+            block_number=blnr,
+            block_proc_control_flags=_BlockProcCtrlFlags(bpcf),
             data=data,
+        )
+
+        can_blks: list[_CanonicalBlock] = [pld_blk]
+
+        return Bundle(
+            primary_block=prim_blk,
+            canonical_blocks=can_blks,
+            data=data,
+        )
+
+    @staticmethod
+    def to_cbor(bundle: Bundle) -> bytes:
+        """
+        Returns the valid CBOR representation of a Bundle object
+        :param bundle: the bundle to encode
+        :return: a CBOR byte-string of the passed Bundle object
+        """
+        raise NotImplementedError(
+            "Since I'm still a little undecided on the implementation details."
         )
 
     def add_block_type(self, block_type: int):
