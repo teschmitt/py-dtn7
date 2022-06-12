@@ -1,8 +1,24 @@
-# py-dtn7
+# py-dtn7 (Work in Progress -- don't use yet)
 
 [![Licence AGPL-3.0](https://img.shields.io/github/license/teschmitt/py-dtn7)](LICENSE)
 
-A Python library for the DTN7 REST and WebSocket API of [dtn7-rs](https://github.com/dtn7/dtn7-rs).
+A Python library for the DTN7 REST and WebSocket API of [dtn7-rs](https://github.com/dtn7/dtn7-rs)
+including a BP7 style `Bundle` type (sort of).
+
+
+### Be warned:
+
+This is very much a work-in-progress.
+Apart from not being very useful yet, anything might change at any time
+since the package is still under development and the requirements are not all
+completely clear yet.
+
+### PR Politics
+
+I'm sorry to say that right now I can't accept any Pull Requests, since this repo is part
+of my Bachelor Thesis and logically any external contribution is forbidden. If you want to
+contribute, please check back around November 2022. Until then feel free to
+fork this repo and do some of your own experiments.
 
 ## Quickstart
 
