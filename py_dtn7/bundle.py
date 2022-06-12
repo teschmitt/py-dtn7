@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Optional, Type
 
 import cbor2
 
-REF_DT = datetime(year=2000, month=1, day=1, hour=0, minute=0, second=0)
+from py_dtn7.utils import from_dtn_timestamp
 
 
 class CRCTypeEnum(Enum):
@@ -163,7 +163,7 @@ class _PrimaryBlock(_Block):
         self._source = source
         self._report_to = source if report_to is None else report_to
         self._timestamp = timestamp
-        self._datetime = REF_DT + timedelta(milliseconds=timestamp)
+        self._datetime = from_dtn_timestamp(timestamp)
         self._sequence_number = sequence_number
         self._lifetime = lifetime
         self._fragment_offset = None
@@ -298,8 +298,9 @@ class _HopCountBlock(_CanonicalBlock):
 
 
 class Bundle:
-    primary_block: _PrimaryBlock
-    canonical_blocks: list[_CanonicalBlock]
+    _primary_block: _PrimaryBlock
+    _canonical_blocks: list[_CanonicalBlock]
+    _data: Optional[bytes]
 
     def __init__(
         self,
@@ -307,9 +308,9 @@ class Bundle:
         canonical_blocks: list[_CanonicalBlock],
         data: Optional[bytes] = None,
     ):
-        self._data: bytes = data
-        self.primary_block = primary_block
-        self.canonical_blocks = canonical_blocks
+        self._primary_block = primary_block
+        self._canonical_blocks = canonical_blocks
+        self._data = data
 
     @staticmethod
     def from_cbor(data: Optional[bytes]) -> Bundle:
@@ -377,6 +378,14 @@ class Bundle:
             data=data,
         )
 
+    @property
+    def payload_block(self):
+        return self._canonical_blocks[0]
+
+    @property
+    def primary_block(self):
+        return self._primary_block
+
     @staticmethod
     def to_cbor(bundle: Bundle) -> bytes:
         """
@@ -418,5 +427,5 @@ class Bundle:
         return any([isinstance(block, block_type) for block in self.canonical_blocks])
 
     def __repr__(self) -> str:
-        ret: list[_Block] = [self.primary_block]
+        ret: list[_Block] = [self._primary_block]
         return str(ret + self.canonical_blocks)
