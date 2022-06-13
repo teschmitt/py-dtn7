@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "py-dtn7"
-version = "0.2.0-alpha.0"
+version = "0.2.1-alpha.0"
 description = ""
 authors = ["Thomas Schmitt <t.e.schmitt@posteo.de>"]
 
@@ -37,6 +37,7 @@ pre-commit = "^2.18.1"
 isort = "^5.10.1"
 jupyterlab = "^3.4.2"
 pdoc = "^12.0.2"
+coverage = {extras = ["toml"], version = "^6.4.1"}
 
 [tool.black]
 include = '\.pyi?$'
@@ -61,7 +62,8 @@ exclude = '''
 profile = 'black'
 multi_line_output = 3
 
-
+[tool.coverage.run]
+omit = ["*/tests/*",".*", "*/site-packages/*"]
 
 
 [build-system]
