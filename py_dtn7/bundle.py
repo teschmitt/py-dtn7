@@ -191,8 +191,12 @@ class _PrimaryBlock(_Block):
         return self._source
 
     @property
-    def creation_timestamp(self):
-        return self._creation_timestamp
+    def timestamp(self):
+        return self._timestamp
+
+    @property
+    def dt(self):
+        return self._datetime
 
     @property
     def lifetime(self):

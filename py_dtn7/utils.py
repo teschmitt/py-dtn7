@@ -15,3 +15,12 @@ def from_dtn_timestamp(timestamp: int) -> datetime:
     :return: a Python datetime object representing the DTN timestamp
     """
     return REF_DT + timedelta(milliseconds=timestamp)
+
+
+def to_dtn_timestamp(dt: datetime = datetime.utcnow()) -> int:
+    """
+    Converts a Python datetime object into a DTN timestamp
+    :param dt:
+    :return:
+    """
+    return (dt - REF_DT).seconds * 1000
