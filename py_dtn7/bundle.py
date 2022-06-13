@@ -333,7 +333,6 @@ class Bundle:
         """
         blocks: list[list] = cbor2.loads(data)
         primary_block_data: list = blocks[0]
-        payload_block_data: list = blocks[-1]  # noqa F841
 
         # parse primary block
         try:
@@ -358,23 +357,39 @@ class Bundle:
             lifetime=lft,
         )
 
-        # parse payload block
-        try:
-            blnr: int = payload_block_data[1]
-            bpcf: int = payload_block_data[2]
-            crct: int = payload_block_data[3]  # noqa F841
-            data: bytes = payload_block_data[4]
-            crc: Optional[str] = None  # noqa F841
-        except IndexError as e:
-            raise IndexError(f"Passed CBOR data is not a valid bundle: {e}")
+        can_blks: list[_CanonicalBlock] = []
+        for blk_data in blocks[1:]:
+            parsed_block_type: Type[_CanonicalBlock]
+            try:
+                blt: int = blk_data[0]
+                blnr = blk_data[1]
+                bpcf = blk_data[2]
+                crct = blk_data[3]  # noqa F841
+                data = blk_data[4]
+                crc: Optional[str] = None  # noqa F841
+            except IndexError as e:
+                raise IndexError(f"Passed CBOR data is not a valid bundle: {e}")
 
-        pld_blk: _PayloadBlock = _PayloadBlock(
-            block_number=blnr,
-            block_proc_control_flags=_BlockProcCtrlFlags(bpcf),
-            data=data,
-        )
+            if blt == 1:
+                parsed_block_class = _PayloadBlock
+            elif blt == 6:
+                parsed_block_class = _PreviousNodeBlock
+            elif blt == 7:
+                parsed_block_class = _BundleAgeBlock
+            elif blt == 10:
+                parsed_block_class = _HopCountBlock
+            elif 10 < blt < 192:
+                raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
+            else:
+                raise NotImplementedError(f"Block type {blt} not yet supported.")
 
-        can_blks: list[_CanonicalBlock] = [pld_blk]
+            can_blks.append(
+                parsed_block_class(
+                    block_number=blnr,
+                    block_proc_control_flags=_BlockProcCtrlFlags(bpcf),
+                    data=data,
+                )
+            )
 
         return Bundle(
             primary_block=prim_blk,
@@ -384,7 +399,7 @@ class Bundle:
 
     @property
     def payload_block(self):
-        return self._canonical_blocks[0]
+        return self._canonical_blocks[-1]
 
     @property
     def primary_block(self):
@@ -432,4 +447,4 @@ class Bundle:
 
     def __repr__(self) -> str:
         ret: list[_Block] = [self._primary_block]
-        return str(ret + self.canonical_blocks)
+        return str(ret + self._canonical_blocks)
