@@ -5,6 +5,8 @@ import cbor2 as cbor
 import requests as rq
 from requests import Response
 
+from py_dtn7 import Bundle
+
 
 def has_valid_schema(host: str):
     return host.startswith("https://") or host.startswith("http://")
@@ -102,7 +104,7 @@ class DTNRESTClient:
 
     def get_all_bundles(self) -> list:
         return [
-            cbor.loads(bundle.content)
+            Bundle.from_cbor(bundle.content)
             for bundle in [
                 rq.get(url=f"{self._host}:{self._port}{self.DOWNLOAD_ENDPOINT}?{burl}")
                 for burl in self._raw_bundles
