@@ -1,7 +1,7 @@
 import json
 from base64 import b64encode
 from enum import Enum
-from typing import Any, Callable, ClassVar, Optional
+from typing import Any, Callable, ClassVar, Optional, Iterable
 from urllib import request as rq
 
 import cbor2 as cbor
@@ -45,6 +45,7 @@ class DTNWSClient:
 
     # instance attributes:
     _port: str
+    _running: bool
     _callback: Callable[[Bundle | str], Any]
     _ws_base_url: str
     _endpoints: list[str]
@@ -57,7 +58,7 @@ class DTNWSClient:
         host: Optional[str] = None,
         port: Optional[str] = None,
         ws_base_url: Optional[str] = None,
-        endpoints: Optional[list[str]] = None,
+        endpoints: Optional[Iterable[str]] = None,
     ):
         """
 
@@ -83,6 +84,7 @@ class DTNWSClient:
 
         self._callback = callback
         self._port = port
+        self._running = False
         self._ws_base_url = ws_base_url
         self._endpoints = endpoints
         self._mode = WSMode.DATA_MODE
@@ -95,7 +97,12 @@ class DTNWSClient:
             on_close=self._on_close,
         )
 
-    def start_client(self):
+    def start_client(self) -> None:
+        """
+        This will basically only call WebSocketApp.run_forever(). Since this blocks
+        until the connection ends, dispatch this call to a separate thread in case
+        there is code that should run afterwards.
+        """
         self._ws.run_forever()
 
     def stop_client(self) -> None:
@@ -156,11 +163,10 @@ class DTNWSClient:
         self._ws.send(data=f"{self._SUBSCRIBE_ENDPOINT} {endpoint}")
 
     def _on_open(self, ws: WebSocketApp) -> None:
-        print("Connected")
-        print(ws)
         self._ws.send(data=self._DATA_MODE)
         for eid in self._endpoints:
             ws.send(data=f"{self._SUBSCRIBE_ENDPOINT} {eid}")
+        self._running = True
 
     def _on_message(self, ws: WebSocketApp, msg: Any) -> None:
         # print(f"{msg=}")
@@ -172,7 +178,8 @@ class DTNWSClient:
         print(f"{error=}")
 
     def _on_close(self, ws: WebSocketApp, status_code, msg) -> None:
-        print(f"{status_code=}, {msg=}")
+        # print(f"{status_code=}, {msg=}")
+        self._running = False
         print("Connection closed")
 
     def _get_node_id(self) -> str:
@@ -186,3 +193,7 @@ class DTNWSClient:
             raise RuntimeError("Node ID could not be determined.")
         short_ws.close()
         return resp.split(":", maxsplit=1)[1].strip()
+
+    @property
+    def running(self) -> bool:
+        return self._running
