@@ -195,6 +195,10 @@ class _PrimaryBlock(_Block):
         return self._timestamp
 
     @property
+    def sequence_number(self):
+        return self._sequence_number
+
+    @property
     def dt(self):
         return self._datetime
 
@@ -404,6 +408,26 @@ class Bundle:
     @property
     def primary_block(self):
         return self._primary_block
+
+    @property
+    def bundle_id(self):
+        return f"dtn:{self._primary_block.source}-{self._primary_block.timestamp}-{self._primary_block.sequence_number}"
+
+    @property
+    def source(self):
+        return self._primary_block.source
+
+    @property
+    def destination(self):
+        return self._primary_block.destination
+
+    @property
+    def timestamp(self):
+        return self._primary_block.timestamp
+
+    @property
+    def sequence_number(self):
+        return self._primary_block.sequence_number
 
     @staticmethod
     def to_cbor(bundle: Bundle) -> bytes:
