@@ -1,7 +1,6 @@
 import json
 from typing import ClassVar, Optional, Union
 
-import cbor2 as cbor
 import requests as rq
 from requests import Response
 
@@ -13,7 +12,6 @@ def has_valid_schema(host: str):
 
 
 class DTNRESTClient:
-
     # API endpoints
     DOWNLOAD_ENDPOINT: ClassVar[str] = "/download"
     ENDPOINT_ENDPOINT: ClassVar[str] = "/endpoint"
@@ -21,6 +19,7 @@ class DTNRESTClient:
     SEND_ENDPOINT: ClassVar[str] = "/send"
     UNREGISTER_ENDPOINT: ClassVar[str] = "/unregister"
     STATUS_BUNDLES: ClassVar[str] = "/status/bundles"
+    STATUS_FILTER_BUNDLES: ClassVar[str] = "/status/bundles/filtered"
     STATUS_EIDS: ClassVar[str] = "/status/eids"
     STATUS_INFO: ClassVar[str] = "/status/info"
     STATUS_NODEID: ClassVar[str] = "/status/nodeid"
@@ -56,7 +55,6 @@ class DTNRESTClient:
         lifetime: Optional[int] = None,
         encoding: Optional[str] = None,
     ) -> Response:
-
         dst: str = ""
 
         if destination is not None:
@@ -102,12 +100,39 @@ class DTNRESTClient:
             raise RuntimeError(f'Something went wrong, endpoint "{endpoint}" not unregistered')
         return response
 
-    def get_all_bundles(self) -> list:
+    def get_all_bundles(self) -> list[Bundle]:
+        """
+        Gets all bundles as Bundle objects from the DTNd store. This can cause very much traffic
+        so be sure to use with care.
+        :return: all Bundles that are in the DTNd store
+        """
         return [
             Bundle.from_cbor(bundle.content)
             for bundle in [
                 rq.get(url=f"{self._host}:{self._port}{self.DOWNLOAD_ENDPOINT}?{burl}")
                 for burl in self._raw_bundles
+            ]
+        ]
+
+    def get_filtered_bundles(self, address_part_criteria: str):
+        """
+
+        :param address_part_criteria:
+        :return:
+        """
+        bundles: list[str] = json.loads(
+            rq.get(
+                url=(
+                    f"{self._host}:{self._port}{self.STATUS_FILTER_BUNDLES}"
+                    f"?addr={address_part_criteria}"
+                )
+            ).content
+        )
+        return [
+            Bundle.from_cbor(bundle.content)
+            for bundle in [
+                rq.get(url=f"{self._host}:{self._port}{self.DOWNLOAD_ENDPOINT}?{burl}")
+                for burl in bundles
             ]
         ]
 
