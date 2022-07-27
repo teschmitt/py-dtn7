@@ -1,5 +1,5 @@
 import json
-from typing import ClassVar, Optional, Union
+from typing import ClassVar, Optional, Union, List
 
 import requests as rq
 from requests import Response
@@ -100,7 +100,7 @@ class DTNRESTClient:
             raise RuntimeError(f'Something went wrong, endpoint "{endpoint}" not unregistered')
         return response
 
-    def get_all_bundles(self) -> list[Bundle]:
+    def get_all_bundles(self) -> List[Bundle]:
         """
         Gets all bundles as Bundle objects from the DTNd store. This can cause very much traffic
         so be sure to use with care.
@@ -120,7 +120,7 @@ class DTNRESTClient:
         :param address_part_criteria:
         :return:
         """
-        bundles: list[str] = json.loads(
+        bundles: List[str] = json.loads(
             rq.get(
                 url=(
                     f"{self._host}:{self._port}{self.STATUS_FILTER_BUNDLES}"
@@ -199,7 +199,7 @@ class DTNRESTClient:
         return eps
 
     @property
-    def bundles(self) -> list[dict]:
+    def bundles(self) -> List[dict]:
         res: list = []
         for bundle in self._raw_bundles:
             nodeid, dtn_time, seq_nr = bundle.rsplit("-", 2)
@@ -207,7 +207,7 @@ class DTNRESTClient:
         return res
 
     @property
-    def _raw_bundles(self) -> list[str]:
+    def _raw_bundles(self) -> List[str]:
         return json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_BUNDLES}").content)
 
     @property

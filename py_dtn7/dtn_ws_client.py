@@ -1,7 +1,7 @@
 import json
 from base64 import b64encode
 from enum import Enum
-from typing import Any, Callable, ClassVar, Optional, Iterable
+from typing import Any, Callable, ClassVar, Optional, Iterable, List, Union
 from urllib import request as rq
 
 import cbor2 as cbor
@@ -46,15 +46,15 @@ class DTNWSClient:
     # instance attributes:
     _port: str
     _running: bool
-    _callback: Callable[[Bundle | str], Any]
+    _callback: Union[Callable[[Bundle], Any], Callable[[str], Any]]
     _ws_base_url: str
-    _endpoints: list[str]
+    _endpoints: List[str]
     _mode: WSMode
     _ws: WebSocketApp
 
     def __init__(
         self,
-        callback: Callable[[Bundle | str], Any],
+        callback: Union[Callable[[Bundle], Any], Callable[[str], Any]],
         host: Optional[str] = None,
         port: Optional[str] = None,
         ws_base_url: Optional[str] = None,

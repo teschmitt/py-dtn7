@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Type
+from typing import Optional, Type, List
 
 import cbor2
 
@@ -307,13 +307,13 @@ class _HopCountBlock(_CanonicalBlock):
 
 class Bundle:
     _primary_block: _PrimaryBlock
-    _canonical_blocks: list[_CanonicalBlock]
+    _canonical_blocks: List[_CanonicalBlock]
     _data: Optional[bytes]
 
     def __init__(
         self,
         primary_block: _PrimaryBlock,
-        canonical_blocks: list[_CanonicalBlock],
+        canonical_blocks: List[_CanonicalBlock],
         data: Optional[bytes] = None,
     ):
         self._primary_block = primary_block
@@ -335,7 +335,7 @@ class Bundle:
         block. The last such block MUST be a payload block; the bundle MUST have exactly one payload
         block.
         """
-        blocks: list[list] = cbor2.loads(data)
+        blocks: List[list] = cbor2.loads(data)
         primary_block_data: list = blocks[0]
 
         # parse primary block
@@ -361,7 +361,7 @@ class Bundle:
             lifetime=lft,
         )
 
-        can_blks: list[_CanonicalBlock] = []
+        can_blks: List[_CanonicalBlock] = []
         for blk_data in blocks[1:]:
             parsed_block_type: Type[_CanonicalBlock]
             try:
@@ -470,5 +470,5 @@ class Bundle:
         return any([isinstance(block, block_type) for block in self.canonical_blocks])
 
     def __repr__(self) -> str:
-        ret: list[_Block] = [self._primary_block]
+        ret: List[_Block] = [self._primary_block]
         return str(ret + self._canonical_blocks)
