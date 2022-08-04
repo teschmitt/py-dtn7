@@ -1,7 +1,7 @@
 import json
 from base64 import b64encode
 from enum import Enum
-from typing import Any, Callable, ClassVar, Optional, Iterable, List, Union
+from typing import Any, Callable, ClassVar, Iterable, List, Optional, Union
 from urllib import request as rq
 
 import cbor2 as cbor

@@ -1,5 +1,5 @@
 import json
-from typing import ClassVar, Optional, Union, List
+from typing import ClassVar, List, Optional, Union
 
 import requests as rq
 from requests import Response
@@ -87,7 +87,7 @@ class DTNRESTClient:
             url=f"{self._host}:{self._port}{self.REGISTER_ENDPOINT}?{endpoint}"
         )
         result: str = response.content.decode("utf-8").lower()
-        if "registered" not in result or endpoint not in result:
+        if "registered" not in result or endpoint.lower() not in result:
             raise RuntimeError(f'Something went wrong, endpoint "{endpoint}" not registered')
         return response
 
