@@ -120,14 +120,19 @@ class DTNRESTClient:
         :param address_part_criteria:
         :return:
         """
-        bundles: List[str] = json.loads(
-            rq.get(
-                url=(
-                    f"{self._host}:{self._port}{self.STATUS_FILTER_BUNDLES}"
-                    f"?addr={address_part_criteria}"
-                )
-            ).content
-        )
+        try:
+            bundles: List[str] = json.loads(
+                rq.get(
+                    url=(
+                        f"{self._host}:{self._port}{self.STATUS_FILTER_BUNDLES}"
+                        f"?addr={address_part_criteria}"
+                    )
+                ).content
+            )
+        except json.decoder.JSONDecodeError:
+            # either no or invalid response received so just return empty list
+            return []
+
         return [
             Bundle.from_cbor(bundle.content)
             for bundle in [
