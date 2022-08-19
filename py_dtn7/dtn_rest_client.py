@@ -114,7 +114,7 @@ class DTNRESTClient:
             ]
         ]
 
-    def get_filtered_bundles(self, address_part_criteria: str):
+    def get_filtered_bundles(self, address_part_criteria: str) -> List[str]:
         """
 
         :param address_part_criteria:
@@ -133,13 +133,14 @@ class DTNRESTClient:
             # either no or invalid response received so just return empty list
             return []
 
-        return [
-            Bundle.from_cbor(bundle.content)
-            for bundle in [
-                rq.get(url=f"{self._host}:{self._port}{self.DOWNLOAD_ENDPOINT}?{burl}")
-                for burl in bundles
-            ]
-        ]
+        # return [
+        #     Bundle.from_cbor(bundle.content)
+        #     for bundle in [
+        #         rq.get(url=f"{self._host}:{self._port}{self.DOWNLOAD_ENDPOINT}?{burl}")
+        #         for burl in bundles
+        #     ]
+        # ]
+        return bundles
 
     def fetch_endpoint(self, endpoint: str = None) -> bytes:
         if endpoint is None:
@@ -204,12 +205,8 @@ class DTNRESTClient:
         return eps
 
     @property
-    def bundles(self) -> List[dict]:
-        res: list = []
-        for bundle in self._raw_bundles:
-            nodeid, dtn_time, seq_nr = bundle.rsplit("-", 2)
-            res.append({"node_id": nodeid, "time": int(dtn_time), "seq": int(seq_nr)})
-        return res
+    def bundles(self) -> List[str]:
+        return self._raw_bundles
 
     @property
     def _raw_bundles(self) -> List[str]:
