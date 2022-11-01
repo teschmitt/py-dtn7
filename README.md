@@ -2,23 +2,31 @@
 
 [![Licence AGPL-3.0](https://img.shields.io/github/license/teschmitt/py-dtn7)](LICENSE)
 
-A Python library for the DTN7 REST and WebSocket API of [dtn7-rs](https://github.com/dtn7/dtn7-rs)
-including a BP7 style `Bundle` type (sort of).
+A Python wrapper library for the DTN7 REST and WebSocket API of [dtn7-rs](https://github.com/dtn7/dtn7-rs)
+including a rudimentary BP7 style `Bundle` typ.
 
+### Getting Started
 
-### Be warned:
+To use `py-dtn7` in your project, simply install it from PyPI with Poetry:
 
-This is very much a work-in-progress.
-Apart from not being very useful yet, anything might change at any time
-since the package is still under development and the requirements are not all
-completely clear yet.
+```shell
+$ poetry install --no-dev py_dtn7
+```
 
-### PR Politics
+### Development
 
-I'm sorry to say that right now I can't accept any Pull Requests, since this repo is part
-of my Bachelor Thesis and logically any external contribution is forbidden. If you want to
-contribute, please check back around November 2022. Until then feel free to
-fork this repo and do some of your own experiments.
+This is very much a work-in-progress and by far not complete. The Bundle
+implementation is very rudimentary and does not support any blocks other
+than Primary and Payload.
+
+To generate the API documentation use `pdoc`:
+
+```shell
+$ pdoc ./py_dtn7 --output-directory ./docs
+```
+
+... or check out [py-dtn7.readthedocs.org](https://py-dtn7.readthedocs.org)
+
 
 ## Quickstart
 
@@ -41,7 +49,3 @@ otherwise we use the complete URI:
 >>> r.content.decode("utf-8")
 'Sent payload with 27 bytes'
 ```
-
-## Documentation
-
-Use `pdoc` to generate the API docs or check out [py-dtn7.readthedocs.org](https://py-dtn7.readthedocs.org)
