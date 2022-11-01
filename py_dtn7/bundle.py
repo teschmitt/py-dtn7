@@ -171,35 +171,35 @@ class _PrimaryBlock(_Block):
         self._crc = None
 
     @property
-    def version(self):
+    def version(self) -> int:
         return self._version
 
     @property
-    def bundle_proc_ctrl_flags(self):
+    def bundle_proc_ctrl_flags(self) -> _BundleProcCtrlFlags:
         return self._bundle_proc_ctrl_flags
 
     @property
-    def crc_type(self):
+    def crc_type(self) -> CRCTypeEnum:
         return self._crc_type
 
     @property
-    def destination(self):
+    def destination(self) -> str:
         return self._destination
 
     @property
-    def source(self):
+    def source(self) -> str:
         return self._source
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> int:
         return self._timestamp
 
     @property
-    def sequence_number(self):
+    def sequence_number(self) -> int:
         return self._sequence_number
 
     @property
-    def dt(self):
+    def dt(self) -> datetime:
         return self._datetime
 
     @property
@@ -402,31 +402,52 @@ class Bundle:
         )
 
     @property
-    def payload_block(self):
+    def payload_block(self) -> _CanonicalBlock:
+        """
+        :return: the payload block of the bundle
+        """
         return self._canonical_blocks[-1]
 
     @property
-    def primary_block(self):
+    def primary_block(self) -> _PrimaryBlock:
+        """
+        :return: the primary block of the bundle
+        """
         return self._primary_block
 
     @property
-    def bundle_id(self):
+    def bundle_id(self) -> str:
+        """
+        :return: the bundle ID of the bundle
+        """
         return f"dtn:{self._primary_block.source}-{self._primary_block.timestamp}-{self._primary_block.sequence_number}"
 
     @property
-    def source(self):
+    def source(self) -> str:
+        """
+        :return: the source field of the bundle (from the primary block)
+        """
         return self._primary_block.source
 
     @property
-    def destination(self):
+    def destination(self) -> str:
+        """
+        :return: the destination field of the bundle (from the primary block)
+        """
         return self._primary_block.destination
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> int:
+        """
+        :return: the DTN timestamp of the bundle (from the primary block)
+        """
         return self._primary_block.timestamp
 
     @property
-    def sequence_number(self):
+    def sequence_number(self) -> int:
+        """
+        :return: the sequence number of the bundle (from the primary block)
+        """
         return self._primary_block.sequence_number
 
     @staticmethod
@@ -440,7 +461,17 @@ class Bundle:
             "Since I'm still a little undecided on the implementation details."
         )
 
-    def add_block_type(self, block_type: int):
+    def add_block_type(self, block_type: int) -> None:
+        """
+        Adds and empty block of the following types to the bundle:
+
+             6: Previous Node Block
+             7: Bundle Age Block
+            10: Hop Count Block
+
+        :param block_type: the type of block to add (see RFC 9171)
+        :return: None
+        """
         if block_type == 1:
             raise ValueError("Only exactly 1 payload block allowed in bundle (RFC 9171, 4.1)")
         elif block_type == 6:
@@ -448,26 +479,31 @@ class Bundle:
                 raise ValueError(
                     "Only exactly 1 previous node block allowed in bundle (RFC 9171, 4.4.1)"
                 )
-            self.canonical_blocks.append(_PreviousNodeBlock())
+            self._canonical_blocks.append(_PreviousNodeBlock())
         elif block_type == 7:
             if self._has_block(_BundleAgeBlock):
                 raise ValueError(
                     "Only exactly 1 bundle age block allowed in bundle (RFC 9171, 4.4.2)"
                 )
-            self.canonical_blocks.append(_BundleAgeBlock())
+            self._canonical_blocks.append(_BundleAgeBlock())
         elif block_type == 10:
             if self._has_block(_HopCountBlock):
                 raise ValueError(
                     "Only exactly 1 hop-count block allowed in bundle (RFC 9171, 4.4.3)"
                 )
-            self.canonical_blocks.append(_HopCountBlock())
+            self._canonical_blocks.append(_HopCountBlock())
         elif 10 < block_type < 192:
             raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
         else:
             raise NotImplementedError(f"Block type {block_type} not yet supported.")
 
-    def _has_block(self, block_type: Type[_CanonicalBlock]):
-        return any([isinstance(block, block_type) for block in self.canonical_blocks])
+    def _has_block(self, block_type: Type[_CanonicalBlock]) -> bool:
+        """
+        Returns true if a block of `block_type` is contained in Bundle
+        :param block_type: type of block
+        :return: boolean
+        """
+        return any([isinstance(block, block_type) for block in self._canonical_blocks])
 
     def __repr__(self) -> str:
         ret: List[_Block] = [self._primary_block]
