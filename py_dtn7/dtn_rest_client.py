@@ -1,8 +1,10 @@
 import json
 from typing import ClassVar, List, Optional, Union
 
-import requests as rq
-from requests import Response
+try:
+    import requests
+except ImportError:
+    import urequests as requests
 
 from py_dtn7 import Bundle
 
@@ -17,6 +19,7 @@ class DTNRESTClient:
     ENDPOINT_ENDPOINT: ClassVar[str] = "/endpoint"
     REGISTER_ENDPOINT: ClassVar[str] = "/register"
     SEND_ENDPOINT: ClassVar[str] = "/send"
+    PUSH_ENDPOINT: ClassVar[str] = "/push"
     UNREGISTER_ENDPOINT: ClassVar[str] = "/unregister"
     STATUS_BUNDLES: ClassVar[str] = "/status/bundles"
     STATUS_FILTER_BUNDLES: ClassVar[str] = "/status/bundles/filtered"
@@ -54,7 +57,7 @@ class DTNRESTClient:
         endpoint: Optional[str] = None,
         lifetime: Optional[int] = None,
         encoding: Optional[str] = None,
-    ) -> Response:
+    ) -> requests.Response:
         dst: str = ""
 
         if destination is not None:
@@ -72,18 +75,23 @@ class DTNRESTClient:
         if type(payload) is str:
             if encoding is None:
                 encoding = "utf-8"
-            response: Response = rq.post(url=url, data=payload.encode(encoding=encoding))
+            response: requests.Response = requests.post(url=url, data=payload.encode(encoding=encoding))
         elif type(payload) is dict:
-            response: Response = rq.post(url=url, json=payload)
+            response: requests.Response = requests.post(url=url, json=payload)
         elif type(payload) is bytes:
-            response: Response = rq.post(url=url, data=payload)
+            response: requests.Response = requests.post(url=url, data=payload)
         else:
             raise ValueError("Payload must by of type 'bytes', 'dict' or 'str'.")
 
         return response
 
-    def register(self, endpoint: str) -> Response:
-        response: Response = rq.get(
+    def push(self, bundle: Bundle, raw_bundle: bytes):
+        # currently we can only send pre-constructed bundles, as to_cbor is not implemented yet
+        url = '{}:{}{}'.format(self._host, self._port, self.PUSH_ENDPOINT)
+        return requests.post(url=url, data=raw_bundle)  # todo: replace with .to_cbor() when implemented
+
+    def register(self, endpoint: str) -> requests.Response:
+        response: requests.Response = requests.get(
             url=f"{self._host}:{self._port}{self.REGISTER_ENDPOINT}?{endpoint}"
         )
         result: str = response.content.decode("utf-8").lower()
@@ -91,8 +99,8 @@ class DTNRESTClient:
             raise RuntimeError(f'Something went wrong, endpoint "{endpoint}" not registered')
         return response
 
-    def unregister(self, endpoint: str) -> Response:
-        response: Response = rq.get(
+    def unregister(self, endpoint: str) -> requests.Response:
+        response: requests.Response = requests.get(
             url=f"{self._host}:{self._port}{self.UNREGISTER_ENDPOINT}?{endpoint}"
         )
         result: str = response.content.decode("utf-8").lower()
@@ -109,7 +117,7 @@ class DTNRESTClient:
         return [
             Bundle.from_cbor(bundle.content)
             for bundle in [
-                rq.get(url=f"{self._host}:{self._port}{self.DOWNLOAD_ENDPOINT}?{burl}")
+                requests.get(url=f"{self._host}:{self._port}{self.DOWNLOAD_ENDPOINT}?{burl}")
                 for burl in self._raw_bundles
             ]
         ]
@@ -122,10 +130,9 @@ class DTNRESTClient:
         """
         try:
             bundles: List[str] = json.loads(
-                rq.get(
-                    url=(
-                        f"{self._host}:{self._port}{self.STATUS_FILTER_BUNDLES}"
-                        f"?addr={address_part_criteria}"
+                requests.get(
+                    url='{}:{}{}?addr={}'.format(
+                        self._host, self._port, self.STATUS_FILTER_BUNDLES, address_part_criteria
                     )
                 ).content
             )
@@ -145,7 +152,7 @@ class DTNRESTClient:
     def fetch_endpoint(self, endpoint: str = None) -> bytes:
         if endpoint is None:
             endpoint = self._nodeid
-        return rq.get(url=f"{self._host}:{self._port}{self.ENDPOINT_ENDPOINT}?{endpoint}").content
+        return requests.get(url=f"{self._host}:{self._port}{self.ENDPOINT_ENDPOINT}?{endpoint}").content
 
     def download(
         self,
@@ -188,7 +195,7 @@ class DTNRESTClient:
             if host[-1] == "/":
                 host = host[:-1]
 
-        return rq.get(url=f"{host}:{port}{self.DOWNLOAD_ENDPOINT}?{bundle_id}").content
+        return requests.get(url=f"{host}:{port}{self.DOWNLOAD_ENDPOINT}?{bundle_id}").content
 
     @property
     def host(self) -> str:
@@ -200,7 +207,7 @@ class DTNRESTClient:
 
     @property
     def endpoints(self) -> list:
-        eps: list = json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_EIDS}").content)
+        eps: list = json.loads(requests.get(url=f"{self._host}:{self._port}{self.STATUS_EIDS}").content)
         # eps = list(map(lambda ep: ep.rsplit("/", 1)[1], eps))
         return eps
 
@@ -210,19 +217,19 @@ class DTNRESTClient:
 
     @property
     def _raw_bundles(self) -> List[str]:
-        return json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_BUNDLES}").content)
+        return json.loads(requests.get(url=f"{self._host}:{self._port}{self.STATUS_BUNDLES}").content)
 
     @property
     def store(self) -> list:
-        return json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_STORE}").content)
+        return json.loads(requests.get(url=f"{self._host}:{self._port}{self.STATUS_STORE}").content)
 
     @property
     def info(self) -> dict:
-        return json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_INFO}").content)
+        return json.loads(requests.get(url=f"{self._host}:{self._port}{self.STATUS_INFO}").content)
 
     @property
     def peers(self) -> dict:
-        return json.loads(rq.get(url=f"{self._host}:{self._port}{self.STATUS_PEERS}").content)
+        return json.loads(requests.get(url=f"{self._host}:{self._port}{self.STATUS_PEERS}").content)
 
     @property
     def node_id(self) -> str:
@@ -235,4 +242,4 @@ class DTNRESTClient:
         return f"<DTNClient@{self._host}:{self._port}, node ID: {self._nodeid}>"
 
     def _get_nodeid(self) -> Optional[str]:
-        return rq.get(url=f"{self._host}:{self._port}{self.STATUS_NODEID}").content.decode("utf-8")
+        return requests.get(url=f"{self._host}:{self._port}{self.STATUS_NODEID}").content.decode("utf-8")
