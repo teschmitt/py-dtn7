@@ -1,4 +1,4 @@
-# py-dtn7 (Work in Progress -- don't use yet)
+# MicroPython compatible fork of py-dtn7 (Work in Progress -- don't use yet)
 
 [![Licence AGPL-3.0](https://img.shields.io/github/license/teschmitt/py-dtn7)](LICENSE)
 
