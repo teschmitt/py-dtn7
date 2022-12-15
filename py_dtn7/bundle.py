@@ -2,12 +2,17 @@
 # more info: https://stackoverflow.com/a/33533514
 from __future__ import annotations
 
+import sys
+
 from abc import ABC
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Type, List
 
-import cbor2
+try:
+    from cbor2 import loads
+except ImportError:
+    from cbor import loads
 
 from py_dtn7.utils import from_dtn_timestamp
 
@@ -16,6 +21,10 @@ class CRCTypeEnum(Enum):
     NOCRC = 0
     X25 = 1
     CRC32C = 2
+
+
+if sys.implementation.name == 'micropython':
+    CRCTypeEnum.prepare()
 
 
 class _BundleProcCtrlFlags:
@@ -215,10 +224,9 @@ class _PrimaryBlock(_Block):
         return self._total_adu_length
 
     def __repr__(self) -> str:
-        return (
-            f"<PrimaryBlock: [{self._version}, {self._bundle_proc_ctrl_flags},"
-            f' {self._crc_type.name}, "{self._destination}", "{self._source}",'
-            f' "{self._report_to}", "{self._report_to}, {self._datetime.isoformat()}"]>'
+        return '<PrimaryBlock: [{}, {}, {}, "{}", "{}", "{}", "{}, {}"]>'.format(
+            self._version, self._bundle_proc_ctrl_flags, self._crc_type.name, self._destination,
+            self._source, self._report_to, self._report_to, self._datetime.isoformat()
         )
 
 
@@ -270,9 +278,8 @@ class _CanonicalBlock(_Block, ABC):
         return self._crc
 
     def __repr__(self) -> str:
-        return (
-            f"<{self.__class__.__name__}: [{self._block_number}, {self._block_proc_ctrl_flags},"
-            f" {self._crc_type.name}, {self._data}>"
+        return '<{}: [{}, {}, {}, {}]>'.format(
+            self.__class__.__name__, self._block_number, self._block_proc_ctrl_flags, self._crc_type.name, self._data
         )
 
 
@@ -335,7 +342,7 @@ class Bundle:
         block. The last such block MUST be a payload block; the bundle MUST have exactly one payload
         block.
         """
-        blocks: List[list] = cbor2.loads(data)
+        blocks: List[list] = loads(data)
         primary_block_data: list = blocks[0]
 
         # parse primary block
