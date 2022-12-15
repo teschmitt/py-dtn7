@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 REF_DT = datetime(year=2000, month=1, day=1, hour=0, minute=0, second=0)
 """
@@ -17,7 +17,7 @@ def from_dtn_timestamp(timestamp: int) -> datetime:
     return REF_DT + timedelta(milliseconds=timestamp)
 
 
-def to_dtn_timestamp(dt: datetime = datetime.utcnow()) -> int:
+def to_dtn_timestamp(dt: datetime = datetime.now(timezone.utc)) -> int:
     """
     Converts a Python datetime object into a DTN timestamp
     :param dt:
