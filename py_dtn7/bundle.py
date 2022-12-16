@@ -18,71 +18,92 @@ CRC_TYPE_X25 = 1
 CRC_TYPE_CRC32C = 2
 
 
-class BundleProcCtrlFlags:
+class BundleProcessingControlFlags:
     """
     4.2.3. Bundle Processing Control Flags
     Bundle processing control flags assert properties of the bundle as a whole rather than of any
     particular block of the bundle. They are conveyed in the primary block of the bundle.
     """
 
-    # The bundle is a fragment
-    is_fragment: bool
-    # The bundle's payload is an administrative record
-    payload_admin_rec: bool
-    # The bundle must not be fragmented
-    no_fragment: bool
-    # Acknowledgment by the user application is requested
-    request_ack: bool
-    # Status time is requested in all status reports
-    request_status_time: bool
-
-    # Flags requesting types of status reports:
-    # Request reporting of bundle reception
-    request_report_reception: bool
-    # Request reporting of bundle forwarding
-    request_report_forwarding: bool
-    # Request reporting of bundle delivery
-    request_report_delivery: bool
-    # Request reporting of bundle deletion
-    request_report_deletion: bool
-
-    init_flags: int
-
     def __init__(self, flags: int):
-        self.init_flags = flags
-        self.request_report_deletion = bool(flags // 262144)
-        flags %= 262144
-        self.request_report_delivery = bool(flags // 131072)
-        flags %= 131072
-        self.request_report_forwarding = bool(flags // 65536)
-        flags %= 65536
-        self.request_report_reception = bool(flags // 16384)
-        flags %= 16384
+        self.flags = flags
 
-        self.request_status_time = bool(flags // 64)
-        flags %= 64
-        self.request_ack = bool(flags // 32)
-        flags %= 32
-        self.no_fragment = bool(flags // 4)
-        flags %= 4
-        self.payload_admin_rec = bool(flags // 2)
-        flags %= 2
-        self.is_fragment = bool(flags)
+    @property
+    def is_fragment(self):
+        # The bundle is a fragment
+        return bool(self.flags & 1)
+
+    @property
+    def payload_is_admin_record(self):
+        # The bundle's payload is an administrative record
+        return bool((self.flags >> 1) & 1)
+
+    @property
+    def do_not_fragment(self):
+        # If True the bundle must not be fragmented
+        return bool((self.flags >> 2) & 1)
+
+    @property
+    def reserved_3_to_4(self):
+        # bits 3 and 4 are reserved for future use
+        return (self.flags >> 3) & 3
+
+    @property
+    def acknowledgement_is_requested(self):
+        # Acknowledgment by the user application is requested
+        return bool((self.flags >> 5) & 1)
+
+    @property
+    def status_time_is_requested(self):
+        # Status time is requested in all status reports
+        return bool((self.flags >> 6) % 1)
+
+    @property
+    def reserved_7_to_13(self):
+        # bits 7 to 13 are reserved for future use
+        return (self.flags >> 7) & 127
+
+    @property
+    def status_of_report_reception_is_requested(self):
+        # Request reporting of bundle reception
+        return bool((self.flags >> 14) & 1)
+
+    @property
+    def reserved_15(self):
+        # bit 15 is reserved for future use
+        return bool((self.flags >> 15) & 1)
+
+    @property
+    def status_of_report_forwarding_is_requested(self):
+        # Request reporting of bundle forwarding
+        return bool((self.flags >> 16) & 1)
+
+    @property
+    def status_of_report_delivery_is_requested(self):
+        # Request reporting of bundle delivery
+        return bool((self.flags >> 17) & 1)
+
+    @property
+    def status_of_report_deletion_is_requested(self):
+        # Request reporting of bundle deletion
+        return bool((self.flags >> 18) & 1)
+
+    @property
+    def reserved_19_to_20(self):
+        # bits 19 and 20 are reserved for future use
+        return (self.flags >> 19) & 3
+
+    @property
+    def unassigned_21_to_63(self):
+        # bits 21 to 63 are unassigned
+        # (shifted because hardware with resource constraints may only support 32bit integers)
+        return self.flags >> 21
 
     def __repr__(self):
-        res: int = 1 * self.is_fragment
-        res += 2 * self.payload_admin_rec
-        res += 4 * self.no_fragment
-        res += 32 * self.request_ack
-        res += 64 * self.request_status_time
-        res += 16384 * self.request_report_reception
-        res += 65536 * self.request_report_forwarding
-        res += 131072 * self.request_report_delivery
-        res += 262144 * self.request_report_deletion
-        return hex(res)
+        return hex(self.flags)
 
 
-class BlockProcCtrlFlags:
+class BlockProcessingControlFlags:
     must_be_replicated: bool
     process_unable_status_report: bool
     process_unable_delete: bool
@@ -135,7 +156,7 @@ class PrimaryBlock(Block):
     def __init__(
             self,
             version: int,
-            bundle_proc_control_flags: BundleProcCtrlFlags,
+            bundle_processing_control_flags: BundleProcessingControlFlags,
             crc_type: int,
             destination_scheme: int,
             destination_specific_part: str,
@@ -151,7 +172,7 @@ class PrimaryBlock(Block):
             crc=None
     ):
         self.version = version
-        self.bundle_proc_ctrl_flags = bundle_proc_control_flags
+        self.bundle_processing_control_flags = bundle_processing_control_flags
         self.crc_type = crc_type
         self.destination_scheme = destination_scheme
         self.destination_specific_part = destination_specific_part
@@ -163,12 +184,10 @@ class PrimaryBlock(Block):
         self.sequence_number = sequence_number
         self.lifetime = lifetime
 
-        self.bundle_creation_time_datetime = from_dtn_timestamp(bundle_creation_time)
-
     def __repr__(self) -> str:
         return '<PrimaryBlock: [{}, {}, {}, [{}, "{}"], [{}, "{}"], [{}, "{}"], {}, {}, {}]>'.format(
             self.version,
-            self.bundle_proc_ctrl_flags,
+            self.bundle_processing_control_flags,
             self.crc_type,
             self.destination_scheme,
             self.destination_specific_part,
@@ -186,7 +205,7 @@ class PrimaryBlock(Block):
         try:
             return PrimaryBlock(
                 version=primary_block[0],
-                bundle_proc_control_flags=BundleProcCtrlFlags(primary_block[1]),
+                bundle_processing_control_flags=BundleProcessingControlFlags(primary_block[1]),
                 crc_type=primary_block[2],
                 destination_scheme=primary_block[3][0],
                 destination_specific_part=primary_block[3][1],
@@ -201,18 +220,22 @@ class PrimaryBlock(Block):
         except IndexError as e:
             raise IndexError('Passed CBOR data is not a valid bundle: {}'.format(e))
 
+    @property
+    def bundle_creation_time_datetime(self):
+        return from_dtn_timestamp(self.bundle_creation_time)
+
 
 class CanonicalBlock(Block, ABC):
     _block_type: int
     _block_number: int
-    _block_proc_ctrl_flags: BlockProcCtrlFlags
+    _block_proc_ctrl_flags: BlockProcessingControlFlags
     _crc_type: int
     _data: bytes
     _crc: Optional[str]
 
     def __init__(
         self,
-        block_proc_control_flags: BlockProcCtrlFlags,
+        block_proc_control_flags: BlockProcessingControlFlags,
         data: bytes,
         block_number: int = 0,
         crc_type: int = CRC_TYPE_NOCRC,
@@ -234,7 +257,7 @@ class CanonicalBlock(Block, ABC):
         return self._block_number
 
     @property
-    def block_proc_ctrl_flags(self) -> BlockProcCtrlFlags:
+    def block_proc_ctrl_flags(self) -> BlockProcessingControlFlags:
         return self._block_proc_ctrl_flags
 
     @property
@@ -258,7 +281,7 @@ class CanonicalBlock(Block, ABC):
 class PayloadBlock(CanonicalBlock):
     def __init__(
         self,
-        block_proc_control_flags: BlockProcCtrlFlags,
+        block_proc_control_flags: BlockProcessingControlFlags,
         data: bytes,
         block_number: int = 0,
         crc_type: int = CRC_TYPE_NOCRC,
@@ -352,7 +375,7 @@ class Bundle:
             can_blks.append(
                 parsed_block_class(
                     block_number=blnr,
-                    block_proc_control_flags=BlockProcCtrlFlags(bundle_proc_control_flags),
+                    block_proc_control_flags=BlockProcessingControlFlags(bundle_proc_control_flags),
                     data=data,
                 )
             )
