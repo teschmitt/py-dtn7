@@ -26,10 +26,10 @@ class Flags:
         return bool((self.flags >> bit) & 1)
 
     def set_flag(self, bit: int):
-        self.flags |= 2 << bit
+        self.flags |= 1 << bit
 
     def unset_flag(self, bit: int):
-        self.flags &= ~(2 << bit)
+        self.flags &= ~(1 << bit)
 
     def __repr__(self):
         return hex(self.flags)
