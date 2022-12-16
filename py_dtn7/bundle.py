@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from datetime import datetime
 from typing import Optional, Type, List
 
 try:
@@ -19,7 +18,7 @@ CRC_TYPE_X25 = 1
 CRC_TYPE_CRC32C = 2
 
 
-class _BundleProcCtrlFlags:
+class BundleProcCtrlFlags:
     """
     4.2.3. Bundle Processing Control Flags
     Bundle processing control flags assert properties of the bundle as a whole rather than of any
@@ -83,7 +82,7 @@ class _BundleProcCtrlFlags:
         return hex(res)
 
 
-class _BlockProcCtrlFlags:
+class BlockProcCtrlFlags:
     must_be_replicated: bool
     process_unable_status_report: bool
     process_unable_delete: bool
@@ -109,11 +108,11 @@ class _BlockProcCtrlFlags:
         return hex(res)
 
 
-class _Block(ABC):
+class Block(ABC):
     pass
 
 
-class _PrimaryBlock(_Block):
+class PrimaryBlock(Block):
     """
     4.3.1. Primary Bundle Block
 
@@ -133,106 +132,87 @@ class _PrimaryBlock(_Block):
        they MUST appear:
     """
 
-    _version: int
-    _bundle_proc_ctrl_flags: _BundleProcCtrlFlags
-    _crc_type: int
-    _destination: str
-    _source: str
-    _report_to: str
-    _timestamp: int
-    _datetime: datetime
-    _sequence_number: int
-    _lifetime: int
-    _fragment_offset: Optional[int]
-    _total_adu_length: int
-    _crc: Optional[str]
-
     def __init__(
-        self,
-        destination: str,
-        source: str,
-        bundle_proc_control_flags: _BundleProcCtrlFlags,
-        timestamp: int,
-        sequence_number: int,
-        report_to: Optional[str] = None,
-        lifetime: int = 1000 * 3600 * 24,
+            self,
+            version: int,
+            bundle_proc_control_flags: BundleProcCtrlFlags,
+            crc_type: int,
+            destination_scheme: int,
+            destination_specific_part: str,
+            source_scheme: int,
+            source_specific_part: str,
+            report_to_scheme: int,
+            report_to_specific_part: str,
+            bundle_creation_time: int,
+            sequence_number: int,
+            lifetime: int = 1000 * 3600 * 24,
+            fragment_offset: int = None,
+            total_application_data_unit_length: int = None,
+            crc=None
     ):
-        self._version = 7
-        self._bundle_proc_ctrl_flags = bundle_proc_control_flags
-        self._crc_type = CRC_TYPE_NOCRC
-        self._destination = destination
-        self._source = source
-        self._report_to = source if report_to is None else report_to
-        self._timestamp = timestamp
-        self._datetime = from_dtn_timestamp(timestamp)
-        self._sequence_number = sequence_number
-        self._lifetime = lifetime
-        self._fragment_offset = None
-        self._total_adu_length = 0
-        self._crc = None
+        self.version = version
+        self.bundle_proc_ctrl_flags = bundle_proc_control_flags
+        self.crc_type = crc_type
+        self.destination_scheme = destination_scheme
+        self.destination_specific_part = destination_specific_part
+        self.source_scheme = source_scheme
+        self.source_specific_part = source_specific_part
+        self.report_to_scheme = report_to_scheme
+        self.report_to_specific_part = report_to_specific_part
+        self.bundle_creation_time = bundle_creation_time
+        self.sequence_number = sequence_number
+        self.lifetime = lifetime
 
-    @property
-    def version(self) -> int:
-        return self._version
-
-    @property
-    def bundle_proc_ctrl_flags(self) -> _BundleProcCtrlFlags:
-        return self._bundle_proc_ctrl_flags
-
-    @property
-    def crc_type(self) -> int:
-        return self._crc_type
-
-    @property
-    def destination(self) -> str:
-        return self._destination
-
-    @property
-    def source(self) -> str:
-        return self._source
-
-    @property
-    def timestamp(self) -> int:
-        return self._timestamp
-
-    @property
-    def sequence_number(self) -> int:
-        return self._sequence_number
-
-    @property
-    def dt(self) -> datetime:
-        return self._datetime
-
-    @property
-    def lifetime(self):
-        return self._lifetime
-
-    @property
-    def fragment_offset(self):
-        return self._fragment_offset
-
-    @property
-    def total_adu_length(self):
-        return self._total_adu_length
+        self.bundle_creation_time_datetime = from_dtn_timestamp(bundle_creation_time)
 
     def __repr__(self) -> str:
-        return '<PrimaryBlock: [{}, {}, {}, "{}", "{}", "{}", "{}, {}"]>'.format(
-            self._version, self._bundle_proc_ctrl_flags, self._crc_type, self._destination,
-            self._source, self._report_to, self._report_to, self._datetime.isoformat()
+        return '<PrimaryBlock: [{}, {}, {}, [{}, "{}"], [{}, "{}"], [{}, "{}"], {}, {}, {}]>'.format(
+            self.version,
+            self.bundle_proc_ctrl_flags,
+            self.crc_type,
+            self.destination_scheme,
+            self.destination_specific_part,
+            self.source_scheme,
+            self.source_specific_part,
+            self.report_to_scheme,
+            self.report_to_specific_part,
+            self.bundle_creation_time,
+            self.sequence_number,
+            self.lifetime
         )
 
+    @staticmethod
+    def from_block_data(primary_block: list) -> PrimaryBlock:
+        try:
+            return PrimaryBlock(
+                version=primary_block[0],
+                bundle_proc_control_flags=BundleProcCtrlFlags(primary_block[1]),
+                crc_type=primary_block[2],
+                destination_scheme=primary_block[3][0],
+                destination_specific_part=primary_block[3][1],
+                source_scheme=primary_block[4][0],
+                source_specific_part=primary_block[4][1],
+                report_to_scheme=primary_block[5][0],
+                report_to_specific_part=primary_block[5][1],
+                bundle_creation_time=primary_block[6][0],
+                sequence_number=primary_block[6][1],
+                lifetime=primary_block[7]
+            )
+        except IndexError as e:
+            raise IndexError('Passed CBOR data is not a valid bundle: {}'.format(e))
 
-class _CanonicalBlock(_Block, ABC):
+
+class CanonicalBlock(Block, ABC):
     _block_type: int
     _block_number: int
-    _block_proc_ctrl_flags: _BlockProcCtrlFlags
+    _block_proc_ctrl_flags: BlockProcCtrlFlags
     _crc_type: int
     _data: bytes
     _crc: Optional[str]
 
     def __init__(
         self,
-        block_proc_control_flags: _BlockProcCtrlFlags,
+        block_proc_control_flags: BlockProcCtrlFlags,
         data: bytes,
         block_number: int = 0,
         crc_type: int = CRC_TYPE_NOCRC,
@@ -254,7 +234,7 @@ class _CanonicalBlock(_Block, ABC):
         return self._block_number
 
     @property
-    def block_proc_ctrl_flags(self) -> _BlockProcCtrlFlags:
+    def block_proc_ctrl_flags(self) -> BlockProcCtrlFlags:
         return self._block_proc_ctrl_flags
 
     @property
@@ -275,10 +255,10 @@ class _CanonicalBlock(_Block, ABC):
         )
 
 
-class _PayloadBlock(_CanonicalBlock):
+class PayloadBlock(CanonicalBlock):
     def __init__(
         self,
-        block_proc_control_flags: _BlockProcCtrlFlags,
+        block_proc_control_flags: BlockProcCtrlFlags,
         data: bytes,
         block_number: int = 0,
         crc_type: int = CRC_TYPE_NOCRC,
@@ -288,31 +268,31 @@ class _PayloadBlock(_CanonicalBlock):
         self._block_type = 1
 
 
-class _PreviousNodeBlock(_CanonicalBlock):
+class PreviousNodeBlock(CanonicalBlock):
     _block_type = 6
     forwarder_id: str = ""
 
 
-class _BundleAgeBlock(_CanonicalBlock):
+class BundleAgeBlock(CanonicalBlock):
     _block_type = 7
     age: int = 0
 
 
-class _HopCountBlock(_CanonicalBlock):
+class HopCountBlock(CanonicalBlock):
     _block_type = 10
     hop_limit: int = 0
     hop_count: int = 0
 
 
 class Bundle:
-    _primary_block: _PrimaryBlock
-    _canonical_blocks: List[_CanonicalBlock]
+    _primary_block: PrimaryBlock
+    _canonical_blocks: List[CanonicalBlock]
     _data: Optional[bytes]
 
     def __init__(
         self,
-        primary_block: _PrimaryBlock,
-        canonical_blocks: List[_CanonicalBlock],
+        primary_block: PrimaryBlock,
+        canonical_blocks: List[CanonicalBlock],
         data: Optional[bytes] = None,
     ):
         self._primary_block = primary_block
@@ -320,10 +300,15 @@ class Bundle:
         self._data = data
 
     @staticmethod
-    def from_cbor(data: Optional[bytes]) -> Bundle:
+    def from_cbor(data: bytes):
+        blocks: List[list] = loads(data)
+        return Bundle.from_block_data(blocks)
+
+    @staticmethod
+    def from_block_data(blocks: list) -> Bundle:
         """
         Create a new Bundle object from valid CBOR data
-        :param data: bundle data as CBOR encoded object
+        :param blocks: bundle data as CBOR decoded block list
         :return: a bundle object constructed from the passed data
         """
 
@@ -334,39 +319,17 @@ class Bundle:
         block. The last such block MUST be a payload block; the bundle MUST have exactly one payload
         block.
         """
-        blocks: List[list] = loads(data)
-        primary_block_data: list = blocks[0]
+        prim_blk: PrimaryBlock = PrimaryBlock.from_block_data(blocks[0])
 
-        # parse primary block
-        try:
-            bpcf: int = primary_block_data[1]
-            crct: int = primary_block_data[2]  # noqa F841
-            dst: str = primary_block_data[3][1]
-            src: str = primary_block_data[4][1]
-            rpt: str = primary_block_data[5][1]
-            tst: int = primary_block_data[6][0]
-            seq: int = primary_block_data[6][1]
-            lft: int = primary_block_data[7]
-        except IndexError as e:
-            raise IndexError(f"Passed CBOR data is not a valid bundle: {e}")
+        data = None
 
-        prim_blk: _PrimaryBlock = _PrimaryBlock(
-            source=src,
-            destination=dst,
-            bundle_proc_control_flags=_BundleProcCtrlFlags(bpcf),
-            timestamp=tst,
-            sequence_number=seq,
-            report_to=rpt,
-            lifetime=lft,
-        )
-
-        can_blks: List[_CanonicalBlock] = []
+        can_blks: List[CanonicalBlock] = []
         for blk_data in blocks[1:]:
-            parsed_block_type: Type[_CanonicalBlock]
+            parsed_block_type: Type[CanonicalBlock]
             try:
                 blt: int = blk_data[0]
                 blnr = blk_data[1]
-                bpcf = blk_data[2]
+                bundle_proc_control_flags = blk_data[2]
                 crct = blk_data[3]  # noqa F841
                 data = blk_data[4]
                 crc: Optional[str] = None  # noqa F841
@@ -374,13 +337,13 @@ class Bundle:
                 raise IndexError(f"Passed CBOR data is not a valid bundle: {e}")
 
             if blt == 1:
-                parsed_block_class = _PayloadBlock
+                parsed_block_class = PayloadBlock
             elif blt == 6:
-                parsed_block_class = _PreviousNodeBlock
+                parsed_block_class = PreviousNodeBlock
             elif blt == 7:
-                parsed_block_class = _BundleAgeBlock
+                parsed_block_class = BundleAgeBlock
             elif blt == 10:
-                parsed_block_class = _HopCountBlock
+                parsed_block_class = HopCountBlock
             elif 10 < blt < 192:
                 raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
             else:
@@ -389,7 +352,7 @@ class Bundle:
             can_blks.append(
                 parsed_block_class(
                     block_number=blnr,
-                    block_proc_control_flags=_BlockProcCtrlFlags(bpcf),
+                    block_proc_control_flags=BlockProcCtrlFlags(bundle_proc_control_flags),
                     data=data,
                 )
             )
@@ -401,14 +364,14 @@ class Bundle:
         )
 
     @property
-    def payload_block(self) -> _CanonicalBlock:
+    def payload_block(self) -> CanonicalBlock:
         """
         :return: the payload block of the bundle
         """
         return self._canonical_blocks[-1]
 
     @property
-    def primary_block(self) -> _PrimaryBlock:
+    def primary_block(self) -> PrimaryBlock:
         """
         :return: the primary block of the bundle
         """
@@ -419,28 +382,28 @@ class Bundle:
         """
         :return: the bundle ID of the bundle
         """
-        return f"dtn:{self._primary_block.source}-{self._primary_block.timestamp}-{self._primary_block.sequence_number}"
+        return f"dtn:{self._primary_block.source_specific_part}-{self._primary_block.bundle_creation_time}-{self._primary_block.sequence_number}"
 
     @property
     def source(self) -> str:
         """
         :return: the source field of the bundle (from the primary block)
         """
-        return self._primary_block.source
+        return self._primary_block.source_specific_part
 
     @property
     def destination(self) -> str:
         """
         :return: the destination field of the bundle (from the primary block)
         """
-        return self._primary_block.destination
+        return self._primary_block.destination_specific_part
 
     @property
     def timestamp(self) -> int:
         """
         :return: the DTN timestamp of the bundle (from the primary block)
         """
-        return self._primary_block.timestamp
+        return self._primary_block.bundle_creation_time
 
     @property
     def sequence_number(self) -> int:
@@ -474,29 +437,29 @@ class Bundle:
         if block_type == 1:
             raise ValueError("Only exactly 1 payload block allowed in bundle (RFC 9171, 4.1)")
         elif block_type == 6:
-            if self._has_block(_PreviousNodeBlock):
+            if self._has_block(PreviousNodeBlock):
                 raise ValueError(
                     "Only exactly 1 previous node block allowed in bundle (RFC 9171, 4.4.1)"
                 )
-            self._canonical_blocks.append(_PreviousNodeBlock())
+            self._canonical_blocks.append(PreviousNodeBlock())
         elif block_type == 7:
-            if self._has_block(_BundleAgeBlock):
+            if self._has_block(BundleAgeBlock):
                 raise ValueError(
                     "Only exactly 1 bundle age block allowed in bundle (RFC 9171, 4.4.2)"
                 )
-            self._canonical_blocks.append(_BundleAgeBlock())
+            self._canonical_blocks.append(BundleAgeBlock())
         elif block_type == 10:
-            if self._has_block(_HopCountBlock):
+            if self._has_block(HopCountBlock):
                 raise ValueError(
                     "Only exactly 1 hop-count block allowed in bundle (RFC 9171, 4.4.3)"
                 )
-            self._canonical_blocks.append(_HopCountBlock())
+            self._canonical_blocks.append(HopCountBlock())
         elif 10 < block_type < 192:
             raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
         else:
             raise NotImplementedError(f"Block type {block_type} not yet supported.")
 
-    def _has_block(self, block_type: Type[_CanonicalBlock]) -> bool:
+    def _has_block(self, block_type: Type[CanonicalBlock]) -> bool:
         """
         Returns true if a block of `block_type` is contained in Bundle
         :param block_type: type of block
@@ -505,5 +468,5 @@ class Bundle:
         return any([isinstance(block, block_type) for block in self._canonical_blocks])
 
     def __repr__(self) -> str:
-        ret: List[_Block] = [self._primary_block]
+        ret: List[Block] = [self._primary_block]
         return str(ret + self._canonical_blocks)
