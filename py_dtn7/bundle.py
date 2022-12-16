@@ -2,11 +2,8 @@
 # more info: https://stackoverflow.com/a/33533514
 from __future__ import annotations
 
-import sys
-
 from abc import ABC
 from datetime import datetime
-from enum import Enum
 from typing import Optional, Type, List
 
 try:
@@ -17,14 +14,9 @@ except ImportError:
 from py_dtn7.utils import from_dtn_timestamp
 
 
-class CRCTypeEnum(Enum):
-    NOCRC = 0
-    X25 = 1
-    CRC32C = 2
-
-
-if sys.implementation.name == 'micropython':
-    CRCTypeEnum.prepare()
+CRC_TYPE_NOCRC = 0
+CRC_TYPE_X25 = 1
+CRC_TYPE_CRC32C = 2
 
 
 class _BundleProcCtrlFlags:
@@ -143,7 +135,7 @@ class _PrimaryBlock(_Block):
 
     _version: int
     _bundle_proc_ctrl_flags: _BundleProcCtrlFlags
-    _crc_type: CRCTypeEnum
+    _crc_type: int
     _destination: str
     _source: str
     _report_to: str
@@ -167,7 +159,7 @@ class _PrimaryBlock(_Block):
     ):
         self._version = 7
         self._bundle_proc_ctrl_flags = bundle_proc_control_flags
-        self._crc_type = CRCTypeEnum.NOCRC
+        self._crc_type = CRC_TYPE_NOCRC
         self._destination = destination
         self._source = source
         self._report_to = source if report_to is None else report_to
@@ -188,7 +180,7 @@ class _PrimaryBlock(_Block):
         return self._bundle_proc_ctrl_flags
 
     @property
-    def crc_type(self) -> CRCTypeEnum:
+    def crc_type(self) -> int:
         return self._crc_type
 
     @property
@@ -225,7 +217,7 @@ class _PrimaryBlock(_Block):
 
     def __repr__(self) -> str:
         return '<PrimaryBlock: [{}, {}, {}, "{}", "{}", "{}", "{}, {}"]>'.format(
-            self._version, self._bundle_proc_ctrl_flags, self._crc_type.name, self._destination,
+            self._version, self._bundle_proc_ctrl_flags, self._crc_type, self._destination,
             self._source, self._report_to, self._report_to, self._datetime.isoformat()
         )
 
@@ -234,7 +226,7 @@ class _CanonicalBlock(_Block, ABC):
     _block_type: int
     _block_number: int
     _block_proc_ctrl_flags: _BlockProcCtrlFlags
-    _crc_type: CRCTypeEnum
+    _crc_type: int
     _data: bytes
     _crc: Optional[str]
 
@@ -243,7 +235,7 @@ class _CanonicalBlock(_Block, ABC):
         block_proc_control_flags: _BlockProcCtrlFlags,
         data: bytes,
         block_number: int = 0,
-        crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC,
+        crc_type: int = CRC_TYPE_NOCRC,
         crc: Optional[str] = None,
     ):
         self._block_type = -1
@@ -266,7 +258,7 @@ class _CanonicalBlock(_Block, ABC):
         return self._block_proc_ctrl_flags
 
     @property
-    def crc_type(self) -> CRCTypeEnum:
+    def crc_type(self) -> int:
         return self._crc_type
 
     @property
@@ -279,7 +271,7 @@ class _CanonicalBlock(_Block, ABC):
 
     def __repr__(self) -> str:
         return '<{}: [{}, {}, {}, {}]>'.format(
-            self.__class__.__name__, self._block_number, self._block_proc_ctrl_flags, self._crc_type.name, self._data
+            self.__class__.__name__, self._block_number, self._block_proc_ctrl_flags, self._crc_type, self._data
         )
 
 
@@ -289,7 +281,7 @@ class _PayloadBlock(_CanonicalBlock):
         block_proc_control_flags: _BlockProcCtrlFlags,
         data: bytes,
         block_number: int = 0,
-        crc_type: CRCTypeEnum = CRCTypeEnum.NOCRC,
+        crc_type: int = CRC_TYPE_NOCRC,
         crc: Optional[str] = None,
     ):
         super().__init__(block_proc_control_flags, data, block_number, crc_type, crc)
