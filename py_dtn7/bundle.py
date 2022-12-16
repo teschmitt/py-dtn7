@@ -18,7 +18,24 @@ CRC_TYPE_X25 = 1
 CRC_TYPE_CRC32C = 2
 
 
-class BundleProcessingControlFlags:
+class Flags:
+    def __init__(self, flags: int):
+        self.flags = flags
+
+    def get_flag(self, bit: int) -> bool:
+        return bool((self.flags >> bit) & 1)
+
+    def set_flag(self, bit: int):
+        self.flags |= 2 << bit
+
+    def unset_flag(self, bit: int):
+        self.flags &= ~(2 << bit)
+
+    def __repr__(self):
+        return hex(self.flags)
+
+
+class BundleProcessingControlFlags(Flags):
     """
     4.2.3. Bundle Processing Control Flags
     Bundle processing control flags assert properties of the bundle as a whole rather than of any
@@ -26,107 +43,161 @@ class BundleProcessingControlFlags:
     """
 
     def __init__(self, flags: int):
-        self.flags = flags
+        super().__init__(flags)
 
     @property
-    def is_fragment(self):
-        # The bundle is a fragment
-        return bool(self.flags & 1)
+    def is_fragment(self) -> bool:
+        """
+        :return: True if the bundle is a fragment
+        """
+        return self.get_flag(0)
 
     @property
-    def payload_is_admin_record(self):
-        # The bundle's payload is an administrative record
-        return bool((self.flags >> 1) & 1)
+    def payload_is_admin_record(self) -> bool:
+        """
+        :return: True if the bundle's payload is an administrative record
+        """
+        return self.get_flag(1)
 
     @property
-    def do_not_fragment(self):
-        # If True the bundle must not be fragmented
-        return bool((self.flags >> 2) & 1)
+    def do_not_fragment(self) -> bool:
+        """
+        :return: True if the bundle must not be fragmented
+        """
+        return self.get_flag(2)
 
     @property
-    def reserved_3_to_4(self):
-        # bits 3 and 4 are reserved for future use
+    def reserved_3_to_4(self) -> int:
+        """
+        :return: shift to zero of bits 3 and 4 that are reserved for future use
+        """
         return (self.flags >> 3) & 3
 
     @property
-    def acknowledgement_is_requested(self):
-        # Acknowledgment by the user application is requested
-        return bool((self.flags >> 5) & 1)
+    def acknowledgement_is_requested(self) -> bool:
+        """
+        :return: True if acknowledgment by the user application is requested
+        """
+        return self.get_flag(5)
 
     @property
-    def status_time_is_requested(self):
-        # Status time is requested in all status reports
-        return bool((self.flags >> 6) % 1)
+    def status_time_is_requested(self) -> bool:
+        """
+        :return: True if status time is requested in all status reports
+        """
+        return self.get_flag(6)
 
     @property
-    def reserved_7_to_13(self):
-        # bits 7 to 13 are reserved for future use
+    def reserved_7_to_13(self) -> int:
+        """
+        :return: shift to zero of bits 7 to 13 that are reserved for future use
+        """
         return (self.flags >> 7) & 127
 
     @property
-    def status_of_report_reception_is_requested(self):
-        # Request reporting of bundle reception
-        return bool((self.flags >> 14) & 1)
+    def status_of_report_reception_is_requested(self) -> bool:
+        """
+        :return: True if status reporting of bundle reception is requested
+        """
+        return self.get_flag(14)
 
     @property
-    def reserved_15(self):
-        # bit 15 is reserved for future use
-        return bool((self.flags >> 15) & 1)
+    def reserved_15(self) -> bool:
+        """
+        :return: value of bit 15 that is reserved for future use
+        """
+        return self.get_flag(15)
 
     @property
-    def status_of_report_forwarding_is_requested(self):
-        # Request reporting of bundle forwarding
-        return bool((self.flags >> 16) & 1)
+    def status_of_report_forwarding_is_requested(self) -> bool:
+        """
+        :return: True if status reporting of bundle forwarding is requested
+        """
+        return self.get_flag(16)
 
     @property
-    def status_of_report_delivery_is_requested(self):
-        # Request reporting of bundle delivery
-        return bool((self.flags >> 17) & 1)
+    def status_of_report_delivery_is_requested(self) -> bool:
+        """
+        :return: True if status reporting of bundle delivery is requested
+        """
+        return self.get_flag(17)
 
     @property
-    def status_of_report_deletion_is_requested(self):
-        # Request reporting of bundle deletion
-        return bool((self.flags >> 18) & 1)
+    def status_of_report_deletion_is_requested(self) -> bool:
+        """
+        :return: True if status reporting of bundle deletion is requested
+        """
+        return self.get_flag(18)
 
     @property
-    def reserved_19_to_20(self):
-        # bits 19 and 20 are reserved for future use
+    def reserved_19_to_20(self) -> int:
+        """
+        :return: shift to zero of bits 19 and 20 that are reserved for future use
+        """
         return (self.flags >> 19) & 3
 
     @property
-    def unassigned_21_to_63(self):
-        # bits 21 to 63 are unassigned
-        # (shifted because hardware with resource constraints may only support 32bit integers)
+    def unassigned_21_to_63(self) -> int:
+        """
+        :return: shift to zero of bits 21 to 63 that are unassigned
+        (shifted because hardware with resource constraints may only support 32bit integers)
+        """
         return self.flags >> 21
 
-    def __repr__(self):
-        return hex(self.flags)
 
-
-class BlockProcessingControlFlags:
-    must_be_replicated: bool
-    process_unable_status_report: bool
-    process_unable_delete: bool
-    process_unable_discard: bool
-
-    init_flags: int
+class BlockProcessingControlFlags(Flags):
 
     def __init__(self, flags: int):
-        self.init_flags = flags
-        self.process_unable_discard = bool(flags // 16)
-        flags %= 16
-        self.process_unable_delete = bool(flags // 4)
-        flags %= 4
-        self.process_unable_status_report = bool(flags // 2)
-        flags %= 2
-        self.must_be_replicated = bool(flags)
+        super().__init__(flags)
 
-    def __repr__(self):
-        res: int = 1 * self.must_be_replicated
-        res += 2 * self.process_unable_status_report
-        res += 4 * self.process_unable_delete
-        res += 16 * self.process_unable_discard
-        return hex(res)
+    @property
+    def block_must_be_replicated(self) -> bool:
+        """
+        :return: True if block must be replicated in every fragment
+        """
+        return self.get_flag(0)
+
+    @property
+    def report_status_if_block_cant_be_processed(self) -> bool:
+        """
+        :return: True if status report must be transmitted if block can't be processed
+        """
+        return self.get_flag(1)
+
+    @property
+    def delete_bundle_if_block_cant_be_processed(self) -> bool:
+        """
+        :return: True if bundle shall be deleted if block can't be processed
+        """
+        return self.get_flag(2)
+
+    @property
+    def reserved_3(self) -> bool:
+        """
+        :return: value of bit 3 that is reserved for future use
+        """
+        return self.get_flag(3)
+
+    @property
+    def discard_block_if_block_cant_be_processed(self) -> bool:
+        """
+        :return: True if block shall be discarded of block can't be processed
+        """
+        return self.get_flag(4)
+
+    @property
+    def reserved_5_to_6(self) -> int:
+        """
+        :return: value of bits 5 and 6 that are reserved for future use
+        """
+        return (self.flags >> 5) & 3
+
+    @property
+    def unassigned_7_to_63(self) -> int:
+        """
+        :return: value of bits 7 to 63 that are unassigned
+        """
+        return self.flags >> 7
 
 
 class Block(ABC):
@@ -228,14 +299,13 @@ class PrimaryBlock(Block):
 class CanonicalBlock(Block, ABC):
     _block_type: int
     _block_number: int
-    _block_proc_ctrl_flags: BlockProcessingControlFlags
     _crc_type: int
     _data: bytes
     _crc: Optional[str]
 
     def __init__(
         self,
-        block_proc_control_flags: BlockProcessingControlFlags,
+        block_processing_control_flags: BlockProcessingControlFlags,
         data: bytes,
         block_number: int = 0,
         crc_type: int = CRC_TYPE_NOCRC,
@@ -243,7 +313,7 @@ class CanonicalBlock(Block, ABC):
     ):
         self._block_type = -1
         self._block_number = block_number
-        self._block_proc_ctrl_flags = block_proc_control_flags
+        self.block_processing_control_flags = block_processing_control_flags
         self._crc_type = crc_type
         self._data = data
         self._crc = crc
@@ -255,10 +325,6 @@ class CanonicalBlock(Block, ABC):
     @property
     def block_number(self) -> int:
         return self._block_number
-
-    @property
-    def block_proc_ctrl_flags(self) -> BlockProcessingControlFlags:
-        return self._block_proc_ctrl_flags
 
     @property
     def crc_type(self) -> int:
@@ -274,20 +340,20 @@ class CanonicalBlock(Block, ABC):
 
     def __repr__(self) -> str:
         return '<{}: [{}, {}, {}, {}]>'.format(
-            self.__class__.__name__, self._block_number, self._block_proc_ctrl_flags, self._crc_type, self._data
+            self.__class__.__name__, self._block_number, self.block_processing_control_flags, self._crc_type, self._data
         )
 
 
 class PayloadBlock(CanonicalBlock):
     def __init__(
         self,
-        block_proc_control_flags: BlockProcessingControlFlags,
+        block_processing_control_flags: BlockProcessingControlFlags,
         data: bytes,
         block_number: int = 0,
         crc_type: int = CRC_TYPE_NOCRC,
         crc: Optional[str] = None,
     ):
-        super().__init__(block_proc_control_flags, data, block_number, crc_type, crc)
+        super().__init__(block_processing_control_flags, data, block_number, crc_type, crc)
         self._block_type = 1
 
 
@@ -352,7 +418,7 @@ class Bundle:
             try:
                 blt: int = blk_data[0]
                 blnr = blk_data[1]
-                bundle_proc_control_flags = blk_data[2]
+                bundle_processing_control_flags = blk_data[2]
                 crct = blk_data[3]  # noqa F841
                 data = blk_data[4]
                 crc: Optional[str] = None  # noqa F841
@@ -375,7 +441,7 @@ class Bundle:
             can_blks.append(
                 parsed_block_class(
                     block_number=blnr,
-                    block_proc_control_flags=BlockProcessingControlFlags(bundle_proc_control_flags),
+                    block_processing_control_flags=BlockProcessingControlFlags(bundle_processing_control_flags),
                     data=data,
                 )
             )
