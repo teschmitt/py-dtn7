@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Type, List
+from typing import Optional, List
 
 try:
-    from cbor2 import loads
+    from cbor2 import dumps, loads
 except ImportError:
-    from cbor import loads
+    from cbor import dumps, loads
 
 from py_dtn7.utils import from_dtn_timestamp
-from dtn7zero.constants import ENCODING
 
 
 CRC_TYPE_NOCRC = 0
@@ -20,6 +19,8 @@ CRC_TYPE_CRC32C = 2
 
 URI_SCHEME_1 = 'dtn'
 URI_SCHEME_2 = 'ipn'
+
+ENCODING = 'utf-8'
 
 
 class Flags:
@@ -309,6 +310,18 @@ class PrimaryBlock:
         except IndexError as e:
             raise IndexError('Passed CBOR data is not a valid bundle: {}'.format(e))
 
+    def to_block_data(self):
+        return [
+            self.version,
+            self.bundle_processing_control_flags.flags,
+            self.crc_type,
+            [self.destination_scheme, self.destination_specific_part],
+            [self.source_scheme, self.source_specific_part],
+            [self.report_to_scheme, self.report_to_specific_part],
+            [self.bundle_creation_time, self.sequence_number],
+            self.lifetime
+        ]
+
     @property
     def bundle_creation_time_datetime(self):
         return from_dtn_timestamp(self.bundle_creation_time)
@@ -344,7 +357,6 @@ class PrimaryBlock:
     @property
     def full_report_to_uri(self):
         return '{}:{}'.format(PrimaryBlock.scheme_to_uri(self.report_to_scheme), self.report_to_specific_part)
-
 
 
 class CanonicalBlock(ABC):
@@ -412,6 +424,15 @@ class CanonicalBlock(ABC):
             crc_type=block[3],
             data=block[4]
         )
+
+    def to_block_data(self) -> list:
+        return [
+            self.block_type_code,
+            self.block_number,
+            self.block_processing_control_flags.flags,
+            self.crc_type,
+            self.data
+        ]
 
 
 class PayloadBlock(CanonicalBlock):
@@ -521,7 +542,7 @@ class Bundle:
         :return: a bundle object constructed from the passed data
         """
 
-        blocks: List[list] = loads(data)
+        blocks = loads(data)
         return Bundle.from_block_data(blocks)
 
     @staticmethod
@@ -545,6 +566,13 @@ class Bundle:
 
         return Bundle(all_blocks=all_blocks)
 
+    def to_cbor(self) -> bytes:
+        blocks = self.to_block_data()
+        return dumps(blocks)
+
+    def to_block_data(self) -> list:
+        return [block.to_block_data() for block in self.all_blocks]
+
     @property
     def bundle_id(self) -> str:
         """
@@ -554,17 +582,6 @@ class Bundle:
             self.primary_block.full_source_uri,
             self.primary_block.bundle_creation_time,
             self.primary_block.sequence_number
-        )
-
-    @staticmethod
-    def to_cbor(bundle: Bundle) -> bytes:
-        """
-        Returns the valid CBOR representation of a Bundle object
-        :param bundle: the bundle to encode
-        :return: a CBOR byte-string of the passed Bundle object
-        """
-        raise NotImplementedError(
-            "Since I'm still a little undecided on the implementation details."
         )
 
     def __repr__(self) -> str:
