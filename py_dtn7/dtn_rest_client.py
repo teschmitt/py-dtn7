@@ -85,10 +85,10 @@ class DTNRESTClient:
 
         return response
 
-    def push(self, bundle: Bundle, raw_bundle: bytes):
+    def push(self, bundle: Bundle):
         # currently we can only send pre-constructed bundles, as to_cbor is not implemented yet
         url = '{}:{}{}'.format(self._host, self._port, self.PUSH_ENDPOINT)
-        return requests.post(url=url, data=raw_bundle)  # todo: replace with .to_cbor() when implemented
+        return requests.post(url=url, data=bundle.to_cbor())
 
     def register(self, endpoint: str) -> requests.Response:
         response: requests.Response = requests.get(
