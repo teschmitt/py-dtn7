@@ -11,6 +11,7 @@ except ImportError:
     from cbor import loads
 
 from py_dtn7.utils import from_dtn_timestamp
+from dtn7zero.constants import ENCODING
 
 
 CRC_TYPE_NOCRC = 0
@@ -200,11 +201,7 @@ class BlockProcessingControlFlags(Flags):
         return self.flags >> 7
 
 
-class Block(ABC):
-    pass
-
-
-class PrimaryBlock(Block):
+class PrimaryBlock:
     """
     4.3.1. Primary Bundle Block
 
@@ -238,8 +235,8 @@ class PrimaryBlock(Block):
             bundle_creation_time: int,
             sequence_number: int,
             lifetime: int = 1000 * 3600 * 24,
-            fragment_offset: int = None,
-            total_application_data_unit_length: int = None,
+            fragment_offset: Optional[int] = None,
+            total_application_data_unit_length: Optional[int] = None,
             crc=None
     ):
         self.version = version
@@ -273,6 +270,22 @@ class PrimaryBlock(Block):
 
     @staticmethod
     def from_block_data(primary_block: list) -> PrimaryBlock:
+        """
+        length of array may be:
+            8 if the bundle is not a fragment and has no CRC,
+            9 if the bundle is not a fragment and has a CRC,
+            10 if the bundle is a fragment and has no CRC,
+            11 if the bundle is a fragment and has a CRC
+        """
+        if len(primary_block) < 8 or len(primary_block) > 11:
+            raise IndexError('primary block has invalid number of items: {}, should be in [8, 11]'.format(len(primary_block)))
+        if 9 <= len(primary_block) <= 11:
+            raise NotImplementedError('bundles with CRC and fragments are not implemented yet')
+
+        version = primary_block[0]
+        if version != 7:
+            raise NotImplementedError('bundles with other versions than 7 are currently not supported')
+
         try:
             return PrimaryBlock(
                 version=primary_block[0],
@@ -296,107 +309,187 @@ class PrimaryBlock(Block):
         return from_dtn_timestamp(self.bundle_creation_time)
 
 
-class CanonicalBlock(Block, ABC):
-    _block_type: int
-    _block_number: int
-    _crc_type: int
-    _data: bytes
-    _crc: Optional[str]
+class CanonicalBlock(ABC):
 
     def __init__(
-        self,
-        block_processing_control_flags: BlockProcessingControlFlags,
-        data: bytes,
-        block_number: int = 0,
-        crc_type: int = CRC_TYPE_NOCRC,
-        crc: Optional[str] = None,
+            self,
+            block_type_code: int,
+            block_number: int,
+            block_processing_control_flags: BlockProcessingControlFlags,
+            crc_type: int,
+            data: bytes,
+            crc=None,
     ):
-        self._block_type = -1
-        self._block_number = block_number
+        self.block_type_code = block_type_code
+        self.block_number = block_number
         self.block_processing_control_flags = block_processing_control_flags
-        self._crc_type = crc_type
-        self._data = data
-        self._crc = crc
-
-    @property
-    def block_type(self) -> int:
-        return self._block_type
-
-    @property
-    def block_number(self) -> int:
-        return self._block_number
-
-    @property
-    def crc_type(self) -> int:
-        return self._crc_type
-
-    @property
-    def data(self) -> bytes:
-        return self._data
-
-    @property
-    def crc(self) -> Optional[str]:
-        return self._crc
+        self.crc_type = crc_type
+        self.data = data
 
     def __repr__(self) -> str:
         return '<{}: [{}, {}, {}, {}]>'.format(
-            self.__class__.__name__, self._block_number, self.block_processing_control_flags, self._crc_type, self._data
+            self.__class__.__name__,
+            self.block_type_code,
+            self.block_number,
+            self.block_processing_control_flags,
+            self.crc_type,
+            self.data
+        )
+
+    @staticmethod
+    def from_block_data(block: list) -> CanonicalBlock:
+        """
+        length of the array may be:
+            5 if the block has no CRC
+            6 if the block has CRC
+        """
+        if len(block) < 5 or len(block) > 6:
+            raise IndexError('block has invalid number of items: {}, should be in [5, 6]'.format(len(block)))
+        if len(block) == 6:
+            raise NotImplementedError('Canonical blocks with CRC are not implemented yet')
+
+        block_type = block[0]
+
+        if block_type == 1:
+            cls = PayloadBlock
+        elif block_type == 6:
+            cls = PreviousNodeBlock
+        elif block_type == 7:
+            cls = BundleAgeBlock
+        elif block_type == 10:
+            cls = HopCountBlock
+        elif 11 <= block_type <= 191:
+            print('warning: unassigned block type {} used without a dedicated implementation'.format(block_type))
+            cls = CanonicalBlock
+        elif 192 <= block_type <= 255:
+            print('info: experimental block type {} used without a dedicated implementation'.format(block_type))
+            cls = CanonicalBlock
+        else:
+            raise NotImplementedError('block type {} from another bundle protocol version is not supported'.format(block_type))
+
+        return cls(
+            block_type_code=block[0],
+            block_number=block[1],
+            block_processing_control_flags=BlockProcessingControlFlags(block[2]),
+            crc_type=block[3],
+            data=block[4]
         )
 
 
 class PayloadBlock(CanonicalBlock):
-    def __init__(
-        self,
-        block_processing_control_flags: BlockProcessingControlFlags,
-        data: bytes,
-        block_number: int = 0,
-        crc_type: int = CRC_TYPE_NOCRC,
-        crc: Optional[str] = None,
-    ):
-        super().__init__(block_processing_control_flags, data, block_number, crc_type, crc)
-        self._block_type = 1
+    """
+    Block to simply transport the payload data.
+    Provides no definition about the transported payload data.
+    """
+    pass
 
 
 class PreviousNodeBlock(CanonicalBlock):
-    _block_type = 6
-    forwarder_id: str = ""
+    """
+    Block payload-data contains the node id of the previous node that forwarded hte bundle to this node.
+
+    Occurrences:
+    Never if the local node is the source of the bundle.
+    At most once in a bundle otherwise.
+    """
+
+    @property
+    def previous_node_id(self) -> str:
+        """
+        :return: the node-id of the previous node as string (decoded via utf-8 from data bytes)
+        """
+        return self.data.decode(ENCODING)
 
 
 class BundleAgeBlock(CanonicalBlock):
-    _block_type = 7
-    age: int = 0
+    """
+    Block payload-data contains an unsigned integer that represents the elapsed time (in milliseconds) between
+    the time the bundle was created and the time at which it was most recently forwarded.
+
+    Every intermediate node adds their internal processing time, as well the receiving-transmission time.
+    (Although it is not defined in the standard it is my assumption that the receiving node adds the transmission time)
+
+    Occurrences:
+    Exactly once in a bundle if the creation time is zero.
+    At most once in a bundle if the creation time is not zero.
+    """
+
+    @property
+    def age_milliseconds(self) -> int:
+        """
+        :return: the transmission time in milliseconds since creation of the bundle
+        """
+        return self.data  # noqa
 
 
 class HopCountBlock(CanonicalBlock):
-    _block_type = 10
-    hop_limit: int = 0
-    hop_count: int = 0
+    """
+    Block payload-data contains two unsigned integers representing the hop limit and current hop count of a bundle.
+
+    The hop limit must be in range 1 to 255.
+    The hop count must be increased by one before leaving a node.
+    A bundle which exceeds its hop limit should be deleted for the reason "Hop limit exceeded".
+
+    Occurrences:
+    At most once in a bundle.
+    """
+
+    @property
+    def hop_limit(self) -> int:
+        """
+        :return: the bundles hop limit represented by an unsigned integer
+        """
+        return self.data[0]
+
+    @property
+    def hop_count(self) -> int:
+        """
+        :return: the bundles current hop count up until received by this node
+        """
+        return self.data[1]
 
 
 class Bundle:
-    _primary_block: PrimaryBlock
-    _canonical_blocks: List[CanonicalBlock]
-    _data: Optional[bytes]
 
-    def __init__(
-        self,
-        primary_block: PrimaryBlock,
-        canonical_blocks: List[CanonicalBlock],
-        data: Optional[bytes] = None,
-    ):
-        self._primary_block = primary_block
-        self._canonical_blocks = canonical_blocks
-        self._data = data
+    def __init__(self, all_blocks: List[CanonicalBlock]):
+        self.all_blocks = all_blocks
+
+        self.primary_block = None
+        self.previous_node_block = None
+        self.bundle_age_block = None
+        self.hop_count_block = None
+        self.payload_block = None
+        self.other_blocks = []
+
+        for block in all_blocks:
+            if isinstance(block, PrimaryBlock):
+                self.primary_block = block
+            elif isinstance(block, PreviousNodeBlock):
+                self.previous_node_block = block
+            elif isinstance(block, BundleAgeBlock):
+                self.bundle_age_block = block
+            elif isinstance(block, HopCountBlock):
+                self.hop_count_block = block
+            elif isinstance(block, PayloadBlock):
+                self.payload_block = block
+            else:
+                self.other_blocks.append(block)
 
     @staticmethod
-    def from_cbor(data: bytes):
+    def from_cbor(data: bytes) -> Bundle:
+        """
+        Create a new Bundle object from valid CBOR data
+        :param data: bundle data as CBOR byte-string
+        :return: a bundle object constructed from the passed data
+        """
+
         blocks: List[list] = loads(data)
         return Bundle.from_block_data(blocks)
 
     @staticmethod
     def from_block_data(blocks: list) -> Bundle:
         """
-        Create a new Bundle object from valid CBOR data
+        Create a new Bundle object from valid parsed CBOR data
         :param blocks: bundle data as CBOR decoded block list
         :return: a bundle object constructed from the passed data
         """
@@ -408,98 +501,46 @@ class Bundle:
         block. The last such block MUST be a payload block; the bundle MUST have exactly one payload
         block.
         """
-        prim_blk: PrimaryBlock = PrimaryBlock.from_block_data(blocks[0])
+        primary_block: PrimaryBlock = PrimaryBlock.from_block_data(blocks[0])
 
-        data = None
+        all_blocks = [primary_block] + [CanonicalBlock.from_block_data(block) for block in blocks[1:]]  # noqa
 
-        can_blks: List[CanonicalBlock] = []
-        for blk_data in blocks[1:]:
-            parsed_block_type: Type[CanonicalBlock]
-            try:
-                blt: int = blk_data[0]
-                blnr = blk_data[1]
-                bundle_processing_control_flags = blk_data[2]
-                crct = blk_data[3]  # noqa F841
-                data = blk_data[4]
-                crc: Optional[str] = None  # noqa F841
-            except IndexError as e:
-                raise IndexError(f"Passed CBOR data is not a valid bundle: {e}")
-
-            if blt == 1:
-                parsed_block_class = PayloadBlock
-            elif blt == 6:
-                parsed_block_class = PreviousNodeBlock
-            elif blt == 7:
-                parsed_block_class = BundleAgeBlock
-            elif blt == 10:
-                parsed_block_class = HopCountBlock
-            elif 10 < blt < 192:
-                raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
-            else:
-                raise NotImplementedError(f"Block type {blt} not yet supported.")
-
-            can_blks.append(
-                parsed_block_class(
-                    block_number=blnr,
-                    block_processing_control_flags=BlockProcessingControlFlags(bundle_processing_control_flags),
-                    data=data,
-                )
-            )
-
-        return Bundle(
-            primary_block=prim_blk,
-            canonical_blocks=can_blks,
-            data=data,
-        )
-
-    @property
-    def payload_block(self) -> CanonicalBlock:
-        """
-        :return: the payload block of the bundle
-        """
-        return self._canonical_blocks[-1]
-
-    @property
-    def primary_block(self) -> PrimaryBlock:
-        """
-        :return: the primary block of the bundle
-        """
-        return self._primary_block
+        return Bundle(all_blocks=all_blocks)
 
     @property
     def bundle_id(self) -> str:
         """
         :return: the bundle ID of the bundle
         """
-        return f"dtn:{self._primary_block.source_specific_part}-{self._primary_block.bundle_creation_time}-{self._primary_block.sequence_number}"
+        return f"dtn:{self.primary_block.source_specific_part}-{self.primary_block.bundle_creation_time}-{self.primary_block.sequence_number}"
 
     @property
     def source(self) -> str:
         """
         :return: the source field of the bundle (from the primary block)
         """
-        return self._primary_block.source_specific_part
+        return self.primary_block.source_specific_part
 
     @property
     def destination(self) -> str:
         """
         :return: the destination field of the bundle (from the primary block)
         """
-        return self._primary_block.destination_specific_part
+        return self.primary_block.destination_specific_part
 
     @property
     def timestamp(self) -> int:
         """
         :return: the DTN timestamp of the bundle (from the primary block)
         """
-        return self._primary_block.bundle_creation_time
+        return self.primary_block.bundle_creation_time
 
     @property
     def sequence_number(self) -> int:
         """
         :return: the sequence number of the bundle (from the primary block)
         """
-        return self._primary_block.sequence_number
+        return self.primary_block.sequence_number
 
     @staticmethod
     def to_cbor(bundle: Bundle) -> bytes:
@@ -512,50 +553,5 @@ class Bundle:
             "Since I'm still a little undecided on the implementation details."
         )
 
-    def add_block_type(self, block_type: int) -> None:
-        """
-        Adds and empty block of the following types to the bundle:
-
-             6: Previous Node Block
-             7: Bundle Age Block
-            10: Hop Count Block
-
-        :param block_type: the type of block to add (see RFC 9171)
-        :return: None
-        """
-        if block_type == 1:
-            raise ValueError("Only exactly 1 payload block allowed in bundle (RFC 9171, 4.1)")
-        elif block_type == 6:
-            if self._has_block(PreviousNodeBlock):
-                raise ValueError(
-                    "Only exactly 1 previous node block allowed in bundle (RFC 9171, 4.4.1)"
-                )
-            self._canonical_blocks.append(PreviousNodeBlock())
-        elif block_type == 7:
-            if self._has_block(BundleAgeBlock):
-                raise ValueError(
-                    "Only exactly 1 bundle age block allowed in bundle (RFC 9171, 4.4.2)"
-                )
-            self._canonical_blocks.append(BundleAgeBlock())
-        elif block_type == 10:
-            if self._has_block(HopCountBlock):
-                raise ValueError(
-                    "Only exactly 1 hop-count block allowed in bundle (RFC 9171, 4.4.3)"
-                )
-            self._canonical_blocks.append(HopCountBlock())
-        elif 10 < block_type < 192:
-            raise ValueError("Block types 11 to 191 are unassigned (RFC 9171, 9.1")
-        else:
-            raise NotImplementedError(f"Block type {block_type} not yet supported.")
-
-    def _has_block(self, block_type: Type[CanonicalBlock]) -> bool:
-        """
-        Returns true if a block of `block_type` is contained in Bundle
-        :param block_type: type of block
-        :return: boolean
-        """
-        return any([isinstance(block, block_type) for block in self._canonical_blocks])
-
     def __repr__(self) -> str:
-        ret: List[Block] = [self._primary_block]
-        return str(ret + self._canonical_blocks)
+        return '<{}: {}>'.format(self.__class__.__name__, self.all_blocks)
