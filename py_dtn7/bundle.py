@@ -18,6 +18,9 @@ CRC_TYPE_NOCRC = 0
 CRC_TYPE_X25 = 1
 CRC_TYPE_CRC32C = 2
 
+URI_SCHEME_1 = 'dtn'
+URI_SCHEME_2 = 'ipn'
+
 
 class Flags:
     def __init__(self, flags: int):
@@ -252,6 +255,12 @@ class PrimaryBlock:
         self.sequence_number = sequence_number
         self.lifetime = lifetime
 
+        if version != 7:
+            raise NotImplementedError('bundles with other versions than 7 are currently not supported')
+
+        for scheme in (destination_scheme, source_scheme, report_to_scheme):
+            self.check_uri_scheme(scheme)
+
     def __repr__(self) -> str:
         return '<PrimaryBlock: [{}, {}, {}, [{}, "{}"], [{}, "{}"], [{}, "{}"], {}, {}, {}]>'.format(
             self.version,
@@ -282,10 +291,6 @@ class PrimaryBlock:
         if 9 <= len(primary_block) <= 11:
             raise NotImplementedError('bundles with CRC and fragments are not implemented yet')
 
-        version = primary_block[0]
-        if version != 7:
-            raise NotImplementedError('bundles with other versions than 7 are currently not supported')
-
         try:
             return PrimaryBlock(
                 version=primary_block[0],
@@ -307,6 +312,39 @@ class PrimaryBlock:
     @property
     def bundle_creation_time_datetime(self):
         return from_dtn_timestamp(self.bundle_creation_time)
+
+    @staticmethod
+    def check_uri_scheme(scheme: int):
+        if scheme == 0:
+            raise IndexError('bundle uses reserved uri scheme 0')
+        elif 3 <= scheme <= 254:
+            raise IndexError('bundle uses unassigned uri scheme {}'.format(scheme))
+        elif 255 <= scheme <= 65535:
+            raise IndexError('bundle uses reserved uri scheme {}'.format(scheme))
+        elif scheme > 65535:
+            raise IndexError('bundle uses unknown private uri scheme {}'.format(scheme))
+
+    @staticmethod
+    def scheme_to_uri(scheme: int):
+        if scheme == 1:
+            return URI_SCHEME_1
+        elif scheme == 2:
+            return URI_SCHEME_2
+        else:
+            raise IndexError('unknown uri scheme {}'.format(scheme))
+
+    @property
+    def full_source_uri(self):
+        return '{}:{}'.format(PrimaryBlock.scheme_to_uri(self.source_scheme), self.source_specific_part)
+
+    @property
+    def full_destination_uri(self):
+        return '{}:{}'.format(PrimaryBlock.scheme_to_uri(self.destination_scheme), self.destination_specific_part)
+
+    @property
+    def full_report_to_uri(self):
+        return '{}:{}'.format(PrimaryBlock.scheme_to_uri(self.report_to_scheme), self.report_to_specific_part)
+
 
 
 class CanonicalBlock(ABC):
@@ -512,35 +550,11 @@ class Bundle:
         """
         :return: the bundle ID of the bundle
         """
-        return f"dtn:{self.primary_block.source_specific_part}-{self.primary_block.bundle_creation_time}-{self.primary_block.sequence_number}"
-
-    @property
-    def source(self) -> str:
-        """
-        :return: the source field of the bundle (from the primary block)
-        """
-        return self.primary_block.source_specific_part
-
-    @property
-    def destination(self) -> str:
-        """
-        :return: the destination field of the bundle (from the primary block)
-        """
-        return self.primary_block.destination_specific_part
-
-    @property
-    def timestamp(self) -> int:
-        """
-        :return: the DTN timestamp of the bundle (from the primary block)
-        """
-        return self.primary_block.bundle_creation_time
-
-    @property
-    def sequence_number(self) -> int:
-        """
-        :return: the sequence number of the bundle (from the primary block)
-        """
-        return self.primary_block.sequence_number
+        return '{}-{}-{}'.format(
+            self.primary_block.full_source_uri,
+            self.primary_block.bundle_creation_time,
+            self.primary_block.sequence_number
+        )
 
     @staticmethod
     def to_cbor(bundle: Bundle) -> bytes:
