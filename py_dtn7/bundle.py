@@ -522,17 +522,37 @@ class Bundle:
 
         for block in all_blocks:
             if isinstance(block, PrimaryBlock):
-                self.primary_block = block
+                if self.primary_block is None:
+                    self.primary_block = block
+                else:
+                    raise IndexError('Primary block occurs more than once')
             elif isinstance(block, PreviousNodeBlock):
-                self.previous_node_block = block
+                if self.previous_node_block is None:
+                    self.previous_node_block = block
+                else:
+                    raise IndexError('Previous node block occurs more than once')
             elif isinstance(block, BundleAgeBlock):
-                self.bundle_age_block = block
+                if self.bundle_age_block is None:
+                    self.bundle_age_block = block
+                else:
+                    raise IndexError('Bundle age block occurs more than once')
             elif isinstance(block, HopCountBlock):
-                self.hop_count_block = block
+                if self.hop_count_block is None:
+                    self.hop_count_block = block
+                else:
+                    raise IndexError('Hop count block occurs more than once')
             elif isinstance(block, PayloadBlock):
-                self.payload_block = block
+                if self.payload_block is None:
+                    self.payload_block = block
+                else:
+                    raise IndexError('Payload block occurs more than once')
             else:
                 self.other_blocks.append(block)
+
+        if self.primary_block is None:
+            raise IndexError('No primary block given')
+        if self.primary_block.bundle_creation_time == 0 and self.bundle_age_block is None:
+            raise IndexError('No bundle age block given, although creation time is zero')
 
     @staticmethod
     def from_cbor(data: bytes) -> Bundle:
