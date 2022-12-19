@@ -588,7 +588,8 @@ class Bundle:
 
     def to_cbor(self) -> bytes:
         blocks = self.to_block_data()
-        return dumps(blocks)
+        # convert outer finite array to standard-conform infinite array
+        return b'\x9f' + dumps(blocks)[1:] + b'\xff'
 
     def to_block_data(self) -> list:
         return [block.to_block_data() for block in self.all_blocks]
