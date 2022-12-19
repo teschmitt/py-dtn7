@@ -513,11 +513,11 @@ class Bundle:
     def __init__(self, all_blocks: List[CanonicalBlock]):
         self.all_blocks = all_blocks
 
-        self.primary_block = None
-        self.previous_node_block = None
-        self.bundle_age_block = None
-        self.hop_count_block = None
-        self.payload_block = None
+        self.primary_block: PrimaryBlock = None  # noqa
+        self.previous_node_block: Optional[PreviousNodeBlock] = None
+        self.bundle_age_block: Optional[BundleAgeBlock] = None
+        self.hop_count_block: Optional[HopCountBlock] = None
+        self.payload_block: Optional[PayloadBlock] = None
         self.other_blocks = []
 
         for block in all_blocks:
