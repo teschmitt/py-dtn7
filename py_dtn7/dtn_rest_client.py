@@ -85,9 +85,9 @@ class DTNRESTClient:
 
         return response
 
-    def push(self, bundle: Bundle):
+    def push(self, bundle: bytes):
         url = '{}:{}{}'.format(self._host, self._port, self.PUSH_ENDPOINT)
-        return requests.post(url=url, data=bundle.to_cbor())
+        return requests.post(url=url, data=bundle)
 
     def register(self, endpoint: str) -> requests.Response:
         response: requests.Response = requests.get(

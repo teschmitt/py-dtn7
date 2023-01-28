@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-REF_DT = datetime(year=2000, month=1, day=1, hour=0, minute=0, second=0)
+REF_DT = datetime(year=2000, month=1, day=1, hour=0, minute=0, second=0, tzinfo=timezone.utc)
 """
 A DTN time is an unsigned integer indicating the number of milliseconds that have elapsed since the
 DTN Epoch, 2000-01-01 00:00:00 +0000 (UTC). DTN time is not affected by leap seconds.
