@@ -12,7 +12,6 @@ except ImportError:
 
 from py_dtn7.utils import from_dtn_timestamp
 
-
 CRC_TYPE_NOCRC = 0
 CRC_TYPE_X25 = 1
 CRC_TYPE_CRC32C = 2
@@ -288,7 +287,8 @@ class PrimaryBlock:
             11 if the bundle is a fragment and has a CRC
         """
         if len(primary_block) < 8 or len(primary_block) > 11:
-            raise IndexError('primary block has invalid number of items: {}, should be in [8, 11]'.format(len(primary_block)))
+            raise IndexError(
+                'primary block has invalid number of items: {}, should be in [8, 11]'.format(len(primary_block)))
         if 9 <= len(primary_block) <= 11:
             raise NotImplementedError('bundles with CRC and fragments are not implemented yet')
 
@@ -377,7 +377,7 @@ class CanonicalBlock(ABC):
         self.data = data
 
     def __repr__(self) -> str:
-        return '<{}: [{}, {}, {}, {}]>'.format(
+        return '<{}: [{}, {}, {}, {}, {}]>'.format(
             self.__class__.__name__,
             self.block_type_code,
             self.block_number,
@@ -388,6 +388,8 @@ class CanonicalBlock(ABC):
 
     @staticmethod
     def from_block_data(block: list) -> CanonicalBlock:
+        # todo: move checks to init
+
         """
         length of the array may be:
             5 if the block has no CRC
@@ -415,7 +417,8 @@ class CanonicalBlock(ABC):
             print('info: experimental block type {} used without a dedicated implementation'.format(block_type))
             cls = CanonicalBlock
         else:
-            raise NotImplementedError('block type {} from another bundle protocol version is not supported'.format(block_type))
+            raise NotImplementedError(
+                'block type {} from another bundle protocol version is not supported'.format(block_type))
 
         return cls(
             block_type_code=block[0],
@@ -455,9 +458,23 @@ class PreviousNodeBlock(CanonicalBlock):
     @property
     def previous_node_id(self) -> str:
         """
-        :return: the node-id of the previous node as string (decoded via utf-8 from data bytes)
+        :return: the node-id of the previous node as string
         """
-        return self.data.decode(ENCODING)
+        return loads(self.data)
+
+    @staticmethod
+    def from_objects(
+            node_id: str,
+            block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
+    ):
+        return PreviousNodeBlock(
+            block_type_code=6,
+            block_number=1,
+            block_processing_control_flags=block_processing_control_flags,
+            crc_type=0,
+            data=dumps(node_id),
+            crc=None
+        )
 
 
 class BundleAgeBlock(CanonicalBlock):
@@ -478,7 +495,11 @@ class BundleAgeBlock(CanonicalBlock):
         """
         :return: the transmission time in milliseconds since creation of the bundle
         """
-        return self.data  # noqa
+        return loads(self.data)
+
+    @age_milliseconds.setter
+    def age_milliseconds(self, value: int):
+        self.data = dumps(value)
 
 
 class HopCountBlock(CanonicalBlock):
@@ -498,14 +519,23 @@ class HopCountBlock(CanonicalBlock):
         """
         :return: the bundles hop limit represented by an unsigned integer
         """
-        return self.data[0]
+        return loads(self.data)[0]
 
     @property
     def hop_count(self) -> int:
         """
         :return: the bundles current hop count up until received by this node
         """
-        return self.data[1]
+        return loads(self.data)[1]
+
+    @hop_count.setter
+    def hop_count(self, value: int):
+        arr = loads(self.data)
+        arr[1] = value
+        self.data = dumps(arr)
+
+    def __repr__(self) -> str:
+        return '{} (hop-limit: {}, hop-count: {})>'.format(super().__repr__()[:-1], self.hop_limit, self.hop_count)
 
 
 class Bundle:
@@ -521,33 +551,7 @@ class Bundle:
         self.other_blocks = []
 
         for block in all_blocks:
-            if isinstance(block, PrimaryBlock):
-                if self.primary_block is None:
-                    self.primary_block = block
-                else:
-                    raise IndexError('Primary block occurs more than once')
-            elif isinstance(block, PreviousNodeBlock):
-                if self.previous_node_block is None:
-                    self.previous_node_block = block
-                else:
-                    raise IndexError('Previous node block occurs more than once')
-            elif isinstance(block, BundleAgeBlock):
-                if self.bundle_age_block is None:
-                    self.bundle_age_block = block
-                else:
-                    raise IndexError('Bundle age block occurs more than once')
-            elif isinstance(block, HopCountBlock):
-                if self.hop_count_block is None:
-                    self.hop_count_block = block
-                else:
-                    raise IndexError('Hop count block occurs more than once')
-            elif isinstance(block, PayloadBlock):
-                if self.payload_block is None:
-                    self.payload_block = block
-                else:
-                    raise IndexError('Payload block occurs more than once')
-            else:
-                self.other_blocks.append(block)
+            self._set_special_block_getters(block)
 
         if self.primary_block is None:
             raise IndexError('No primary block given')
@@ -594,6 +598,37 @@ class Bundle:
     def to_block_data(self) -> list:
         return [block.to_block_data() for block in self.all_blocks]
 
+    def insert_canonical_block(self, block: CanonicalBlock):
+        used_block_numbers = list(set(b.block_number for b in self.all_blocks[1:]))
+
+        new_block_number = block.block_number
+
+        if new_block_number in used_block_numbers:
+            new_block_number = 1
+            while new_block_number in used_block_numbers:
+                new_block_number += 1
+
+        block.block_number = new_block_number
+
+        self._set_special_block_getters(block)
+        self.all_blocks.append(block)
+
+    def remove_block(self, block):
+        if block in self.all_blocks:
+            self.all_blocks.remove(block)
+        if self.primary_block == block:
+            self.primary_block = None
+        if self.previous_node_block == block:
+            self.previous_node_block = None
+        if self.bundle_age_block == block:
+            self.bundle_age_block = None
+        if self.hop_count_block == block:
+            self.hop_count_block = None
+        if self.payload_block == block:
+            self.payload_block = None
+        if block in self.other_blocks:
+            self.other_blocks.remove(block)
+
     @property
     def bundle_id(self) -> str:
         """
@@ -607,3 +642,32 @@ class Bundle:
 
     def __repr__(self) -> str:
         return '<{}: {}>'.format(self.__class__.__name__, self.all_blocks)
+
+    def _set_special_block_getters(self, block):
+        if isinstance(block, PrimaryBlock):
+            if self.primary_block is None:
+                self.primary_block = block
+            else:
+                raise IndexError('Primary block occurs more than once')
+        elif isinstance(block, PreviousNodeBlock):
+            if self.previous_node_block is None:
+                self.previous_node_block = block
+            else:
+                raise IndexError('Previous node block occurs more than once')
+        elif isinstance(block, BundleAgeBlock):
+            if self.bundle_age_block is None:
+                self.bundle_age_block = block
+            else:
+                raise IndexError('Bundle age block occurs more than once')
+        elif isinstance(block, HopCountBlock):
+            if self.hop_count_block is None:
+                self.hop_count_block = block
+            else:
+                raise IndexError('Hop count block occurs more than once')
+        elif isinstance(block, PayloadBlock):
+            if self.payload_block is None:
+                self.payload_block = block
+            else:
+                raise IndexError('Payload block occurs more than once')
+        else:
+            self.other_blocks.append(block)
