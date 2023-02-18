@@ -23,6 +23,8 @@ ENCODING = 'utf-8'
 
 
 class Flags:
+    flags: int = 0  # repr ignores all class attributes, so flags also needs to be one
+
     def __init__(self, flags: int):
         self.flags = flags
 
@@ -37,6 +39,17 @@ class Flags:
 
     def __repr__(self):
         return hex(self.flags)
+
+    def __str__(self):
+        result = '<{}: ['.format(self.__class__.__name__)
+
+        attributes_to_ignore = dir(Flags)
+
+        for attribute in dir(self):
+            if attribute not in attributes_to_ignore:
+                result += '{}: {}, '.format(attribute, getattr(self, attribute))
+
+        return result[:-2] + ']>'
 
 
 class BundleProcessingControlFlags(Flags):
@@ -264,7 +277,7 @@ class PrimaryBlock:
     def __repr__(self) -> str:
         return '<PrimaryBlock: [{}, {}, {}, [{}, "{}"], [{}, "{}"], [{}, "{}"], {}, {}, {}]>'.format(
             self.version,
-            self.bundle_processing_control_flags,
+            repr(self.bundle_processing_control_flags),
             self.crc_type,
             self.destination_scheme,
             self.destination_specific_part,
@@ -287,8 +300,7 @@ class PrimaryBlock:
             11 if the bundle is a fragment and has a CRC
         """
         if len(primary_block) < 8 or len(primary_block) > 11:
-            raise IndexError(
-                'primary block has invalid number of items: {}, should be in [8, 11]'.format(len(primary_block)))
+            raise IndexError('primary block has invalid number of items: {}, should be in [8, 11]'.format(len(primary_block)))
         if 9 <= len(primary_block) <= 11:
             raise NotImplementedError('bundles with CRC and fragments are not implemented yet')
 
@@ -311,16 +323,44 @@ class PrimaryBlock:
             raise IndexError('Passed CBOR data is not a valid bundle: {}'.format(e))
 
     def to_block_data(self):
-        return [
+        return (
             self.version,
             self.bundle_processing_control_flags.flags,
             self.crc_type,
-            [self.destination_scheme, self.destination_specific_part],
-            [self.source_scheme, self.source_specific_part],
-            [self.report_to_scheme, self.report_to_specific_part],
-            [self.bundle_creation_time, self.sequence_number],
+            (self.destination_scheme, self.destination_specific_part),
+            (self.source_scheme, self.source_specific_part),
+            (self.report_to_scheme, self.report_to_specific_part),
+            (self.bundle_creation_time, self.sequence_number),
             self.lifetime
-        ]
+        )
+
+    @staticmethod
+    def from_objects(
+            bundle_processing_control_flags: BundleProcessingControlFlags = BundleProcessingControlFlags(0),
+            destination_scheme: int = 1,
+            destination_specific_part: str = '',
+            source_scheme: int = 1,
+            source_specific_part: str = '',
+            report_to_scheme: int = 1,
+            report_to_specific_part: str = '',
+            bundle_creation_time: int = 0,
+            sequence_number: int = 0,
+            lifetime: int = 3600 * 24 * 1000
+    ):
+        return PrimaryBlock(
+            version=7,
+            bundle_processing_control_flags=bundle_processing_control_flags,
+            crc_type=0,
+            destination_scheme=destination_scheme,
+            destination_specific_part=destination_specific_part,
+            source_scheme=source_scheme,
+            source_specific_part=source_specific_part,
+            report_to_scheme=report_to_scheme,
+            report_to_specific_part=report_to_specific_part,
+            bundle_creation_time=bundle_creation_time,
+            sequence_number=sequence_number,
+            lifetime=lifetime
+        )
 
     @property
     def bundle_creation_time_datetime(self):
@@ -381,7 +421,7 @@ class CanonicalBlock(ABC):
             self.__class__.__name__,
             self.block_type_code,
             self.block_number,
-            self.block_processing_control_flags,
+            repr(self.block_processing_control_flags),
             self.crc_type,
             self.data
         )
@@ -417,8 +457,7 @@ class CanonicalBlock(ABC):
             print('info: experimental block type {} used without a dedicated implementation'.format(block_type))
             cls = CanonicalBlock
         else:
-            raise NotImplementedError(
-                'block type {} from another bundle protocol version is not supported'.format(block_type))
+            raise NotImplementedError('block type {} from another bundle protocol version is not supported'.format(block_type))
 
         return cls(
             block_type_code=block[0],
@@ -428,14 +467,14 @@ class CanonicalBlock(ABC):
             data=block[4]
         )
 
-    def to_block_data(self) -> list:
-        return [
+    def to_block_data(self) -> tuple:
+        return (
             self.block_type_code,
             self.block_number,
             self.block_processing_control_flags.flags,
             self.crc_type,
             self.data
-        ]
+        )
 
 
 class PayloadBlock(CanonicalBlock):
@@ -443,7 +482,20 @@ class PayloadBlock(CanonicalBlock):
     Block to simply transport the payload data.
     Provides no definition about the transported payload data.
     """
-    pass
+
+    @staticmethod
+    def from_objects(
+            data: bytes,
+            block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
+    ):
+        return PreviousNodeBlock(
+            block_type_code=1,
+            block_number=1,
+            block_processing_control_flags=block_processing_control_flags,
+            crc_type=0,
+            data=data,
+            crc=None
+        )
 
 
 class PreviousNodeBlock(CanonicalBlock):
@@ -501,6 +553,20 @@ class BundleAgeBlock(CanonicalBlock):
     def age_milliseconds(self, value: int):
         self.data = dumps(value)
 
+    @staticmethod
+    def from_objects(
+            age_milliseconds: int = 0,
+            block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
+    ):
+        return BundleAgeBlock(
+            block_type_code=7,
+            block_number=1,
+            block_processing_control_flags=block_processing_control_flags,
+            crc_type=0,
+            data=dumps(age_milliseconds),
+            crc=None
+        )
+
 
 class HopCountBlock(CanonicalBlock):
     """
@@ -534,27 +600,65 @@ class HopCountBlock(CanonicalBlock):
         arr[1] = value
         self.data = dumps(arr)
 
+    @staticmethod
+    def from_objects(
+            hop_limit: int,
+            hop_count: int,
+            block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
+    ):
+        return HopCountBlock(
+            block_type_code=10,
+            block_number=1,
+            block_processing_control_flags=block_processing_control_flags,
+            crc_type=0,
+            data=dumps((hop_limit, hop_count)),
+            crc=None
+        )
+
     def __repr__(self) -> str:
-        return '{} (hop-limit: {}, hop-count: {})>'.format(super().__repr__()[:-1], self.hop_limit, self.hop_count)
+        return '<{}: [{}, {}, {}, {}, [hop-limit: {}, hop-count: {}]]>'.format(
+            self.__class__.__name__,
+            self.block_type_code,
+            self.block_number,
+            repr(self.block_processing_control_flags),
+            self.crc_type,
+            self.hop_limit,
+            self.hop_count
+        )
 
 
 class Bundle:
 
-    def __init__(self, all_blocks: List[CanonicalBlock]):
-        self.all_blocks = all_blocks
-
-        self.primary_block: PrimaryBlock = None  # noqa
-        self.previous_node_block: Optional[PreviousNodeBlock] = None
-        self.bundle_age_block: Optional[BundleAgeBlock] = None
-        self.hop_count_block: Optional[HopCountBlock] = None
-        self.payload_block: Optional[PayloadBlock] = None
+    def __init__(
+            self,
+            primary_block: PrimaryBlock,
+            previous_node_block: Optional[PreviousNodeBlock] = None,
+            bundle_age_block: Optional[BundleAgeBlock] = None,
+            hop_count_block: Optional[HopCountBlock] = None,
+            payload_block: Optional[PayloadBlock] = None,
+            other_blocks: Optional[List[CanonicalBlock]] = None
+    ):
+        self.primary_block = primary_block
+        self.previous_node_block = None
+        self.bundle_age_block = None
+        self.hop_count_block = None
+        self.payload_block = None
         self.other_blocks = []
 
-        for block in all_blocks:
-            self._set_special_block_getters(block)
+        # hacky workaround to check and set a correct node numbering if needed
 
-        if self.primary_block is None:
-            raise IndexError('No primary block given')
+        if previous_node_block is not None:
+            self.insert_canonical_block(previous_node_block)
+        if bundle_age_block is not None:
+            self.insert_canonical_block(bundle_age_block)
+        if hop_count_block is not None:
+            self.insert_canonical_block(hop_count_block)
+        if payload_block is not None:
+            self.insert_canonical_block(payload_block)
+        if other_blocks is not None:
+            for block in other_blocks:
+                self.insert_canonical_block(block)
+
         if self.primary_block.bundle_creation_time == 0 and self.bundle_age_block is None:
             raise IndexError('No bundle age block given, although creation time is zero')
 
@@ -584,22 +688,28 @@ class Bundle:
         block. The last such block MUST be a payload block; the bundle MUST have exactly one payload
         block.
         """
-        primary_block: PrimaryBlock = PrimaryBlock.from_block_data(blocks[0])
+        primary_block = PrimaryBlock.from_block_data(blocks[0])
 
-        all_blocks = [primary_block] + [CanonicalBlock.from_block_data(block) for block in blocks[1:]]  # noqa
+        # We exploit that other-blocks can also contain known valid blocks,
+        # as all blocks are inserted through insert_canonical_block(...).
+        # This removes redundant checks in this method.
 
-        return Bundle(all_blocks=all_blocks)
+        return Bundle(
+            primary_block,
+            other_blocks=(CanonicalBlock.from_block_data(block) for block in blocks[1:])  # noqa
+        )
 
     def to_cbor(self) -> bytes:
         blocks = self.to_block_data()
         # convert outer finite array to standard-conform infinite array
         return b'\x9f' + dumps(blocks)[1:] + b'\xff'
 
-    def to_block_data(self) -> list:
-        return [block.to_block_data() for block in self.all_blocks]
+    def to_block_data(self) -> tuple:
+        primary_block_tuple = (self.primary_block.to_block_data(), )
+        return primary_block_tuple + tuple(block.to_block_data() for block in self._get_all_used_canonical_blocks())
 
     def insert_canonical_block(self, block: CanonicalBlock):
-        used_block_numbers = list(set(b.block_number for b in self.all_blocks[1:]))
+        used_block_numbers = tuple(set(b.block_number for b in self._get_all_used_canonical_blocks()))
 
         new_block_number = block.block_number
 
@@ -610,12 +720,9 @@ class Bundle:
 
         block.block_number = new_block_number
 
-        self._set_special_block_getters(block)
-        self.all_blocks.append(block)
+        self._set_canonical_block_var(block)
 
     def remove_block(self, block):
-        if block in self.all_blocks:
-            self.all_blocks.remove(block)
         if self.primary_block == block:
             self.primary_block = None
         if self.previous_node_block == block:
@@ -641,15 +748,16 @@ class Bundle:
         )
 
     def __repr__(self) -> str:
-        return '<{}: {}>'.format(self.__class__.__name__, self.all_blocks)
+        return '<{}: {}>'.format(self.__class__.__name__, [self.primary_block] + list(self._get_all_used_canonical_blocks()))  # noqa
 
-    def _set_special_block_getters(self, block):
-        if isinstance(block, PrimaryBlock):
-            if self.primary_block is None:
-                self.primary_block = block
-            else:
-                raise IndexError('Primary block occurs more than once')
-        elif isinstance(block, PreviousNodeBlock):
+    def _get_all_used_canonical_blocks(self):
+        all_canonical_blocks = (self.previous_node_block, self.bundle_age_block, self.hop_count_block, self.payload_block)
+        all_canonical_blocks += tuple(self.other_blocks)
+
+        return (block for block in all_canonical_blocks if block is not None)
+
+    def _set_canonical_block_var(self, block: CanonicalBlock):
+        if isinstance(block, PreviousNodeBlock):
             if self.previous_node_block is None:
                 self.previous_node_block = block
             else:
