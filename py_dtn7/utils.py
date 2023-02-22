@@ -23,4 +23,4 @@ def to_dtn_timestamp(dt: datetime = datetime.now(timezone.utc)) -> int:
     :param dt:
     :return:
     """
-    return (dt - REF_DT).seconds * 1000
+    return int((dt - REF_DT).total_seconds() * 1000)  # cutoff beyond milliseconds, no rounding here

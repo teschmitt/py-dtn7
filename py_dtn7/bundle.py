@@ -488,7 +488,7 @@ class PayloadBlock(CanonicalBlock):
             data: bytes,
             block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
     ):
-        return PreviousNodeBlock(
+        return PayloadBlock(
             block_type_code=1,
             block_number=1,
             block_processing_control_flags=block_processing_control_flags,
