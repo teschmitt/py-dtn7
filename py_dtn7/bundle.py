@@ -639,11 +639,11 @@ class Bundle:
             other_blocks: Optional[List[CanonicalBlock]] = None
     ):
         self.primary_block = primary_block
-        self.previous_node_block = None
-        self.bundle_age_block = None
-        self.hop_count_block = None
-        self.payload_block = None
-        self.other_blocks = []
+        self.previous_node_block: Optional[PreviousNodeBlock] = None
+        self.bundle_age_block: Optional[BundleAgeBlock] = None
+        self.hop_count_block: Optional[HopCountBlock] = None
+        self.payload_block: Optional[PayloadBlock] = None
+        self.other_blocks: Optional[List[CanonicalBlock]] = []
 
         # hacky workaround to check and set a correct node numbering if needed
 
