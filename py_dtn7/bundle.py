@@ -25,7 +25,7 @@ ENCODING = 'utf-8'
 class Flags:
     flags: int = 0  # repr ignores all class attributes, so flags also needs to be one
 
-    def __init__(self, flags: int):
+    def __init__(self, flags: int = 0):
         self.flags = flags
 
     def get_flag(self, bit: int) -> bool:
@@ -58,9 +58,6 @@ class BundleProcessingControlFlags(Flags):
     Bundle processing control flags assert properties of the bundle as a whole rather than of any
     particular block of the bundle. They are conveyed in the primary block of the bundle.
     """
-
-    def __init__(self, flags: int):
-        super().__init__(flags)
 
     @property
     def is_fragment(self) -> bool:
@@ -163,9 +160,6 @@ class BundleProcessingControlFlags(Flags):
 
 
 class BlockProcessingControlFlags(Flags):
-
-    def __init__(self, flags: int):
-        super().__init__(flags)
 
     @property
     def block_must_be_replicated(self) -> bool:
