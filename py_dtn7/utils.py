@@ -17,7 +17,10 @@ def from_dtn_timestamp(timestamp: int) -> datetime:
     return REF_DT + timedelta(milliseconds=timestamp)
 
 
-def to_dtn_timestamp(dt: datetime = datetime.now(timezone.utc)) -> int:
+def to_dtn_timestamp(dt: datetime = None) -> int:
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+
     """
     Converts a Python datetime object into a DTN timestamp
     :param dt:
