@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 try:
     from cbor2 import dumps, loads
@@ -502,7 +502,7 @@ class PreviousNodeBlock(CanonicalBlock):
     """
 
     @property
-    def previous_node_id(self) -> str:
+    def previous_node_id(self) -> Tuple[int, str]:
         """
         :return: the node-id of the previous node as string
         """
@@ -510,7 +510,7 @@ class PreviousNodeBlock(CanonicalBlock):
 
     @staticmethod
     def from_objects(
-            node_id: str,
+            node_id: Tuple[int, str],
             block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
     ):
         return PreviousNodeBlock(
