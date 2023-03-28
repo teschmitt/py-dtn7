@@ -7,8 +7,8 @@ The library includes a fully spec compliant `Bundle` type (but without fragment 
 bundle creation and (de-)serialization.
 
 The `bundle.py`, `dtn_rest_client.py`, `utils.py` modules/files are Micropython compatible.
-But, this requires a bit of manual library management. 
-Please refer to the installation Micropython installation guide below.
+But, this requires a bit of manual library management.
+Please refer to the Micropython installation guide below.
 
 ### Getting Started
 
