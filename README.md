@@ -59,7 +59,7 @@ otherwise we use the complete URI:
 
 To be extended:
 
-The dummy libraries `__future__.py`, `abc.py`, `typing.py`, \
-the https://github.com/alexmrqt/micropython-cbor/ CBOR library (specifically the `cbor.py` module/file) \ 
-and `urequests`: `mpremote mip install urequests`, \  
-as well as `datetime`: `mpremote mip install datetime` are needed.
+The dummy libraries `__future__.py`, `abc.py`, `typing.py`, the [micropython-cbor](https://github.com/alexmrqt/micropython-cbor/) library (specifically the `cbor.py` module/file) and `urequests` as well as `datetime` are needed:
+
+$ mpremote mip install urequests
+$ mpremote mip install datetime
