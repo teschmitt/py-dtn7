@@ -11,6 +11,7 @@ DTN Epoch, 2000-01-01 00:00:00 +0000 (UTC). DTN time is not affected by leap sec
 
 RUNNING_MICROPYTHON = sys.implementation.name == "micropython"
 
+
 def from_dtn_timestamp(timestamp: int) -> datetime:
     """
     Converts a DTN timestamp to a Python datetime object

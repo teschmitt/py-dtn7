@@ -1,12 +1,13 @@
 import json
 from typing import ClassVar, List, Optional, Union
 
-try:
-    import requests
-except ImportError:
-    import urequests as requests
-
 from py_dtn7 import Bundle
+from py_dtn7.utils import RUNNING_MICROPYTHON
+
+if not RUNNING_MICROPYTHON:
+    import requests
+else:
+    import urequests as requests
 
 
 def has_valid_schema(host: str):
@@ -75,7 +76,9 @@ class DTNRESTClient:
         if type(payload) is str:
             if encoding is None:
                 encoding = "utf-8"
-            response: requests.Response = requests.post(url=url, data=payload.encode(encoding=encoding))
+            response: requests.Response = requests.post(
+                url=url, data=payload.encode(encoding=encoding)
+            )
         elif type(payload) is dict:
             response: requests.Response = requests.post(url=url, json=payload)
         elif type(payload) is bytes:
@@ -86,7 +89,7 @@ class DTNRESTClient:
         return response
 
     def push(self, bundle: bytes):
-        url = '{}:{}{}'.format(self._host, self._port, self.PUSH_ENDPOINT)
+        url = "{}:{}{}".format(self._host, self._port, self.PUSH_ENDPOINT)
         return requests.post(url=url, data=bundle)
 
     def register(self, endpoint: str) -> requests.Response:
@@ -130,7 +133,7 @@ class DTNRESTClient:
         try:
             bundles: List[str] = json.loads(
                 requests.get(
-                    url='{}:{}{}?addr={}'.format(
+                    url="{}:{}{}?addr={}".format(
                         self._host, self._port, self.STATUS_FILTER_BUNDLES, address_part_criteria
                     )
                 ).content
@@ -151,7 +154,9 @@ class DTNRESTClient:
     def fetch_endpoint(self, endpoint: str = None) -> bytes:
         if endpoint is None:
             endpoint = self._nodeid
-        return requests.get(url=f"{self._host}:{self._port}{self.ENDPOINT_ENDPOINT}?{endpoint}").content
+        return requests.get(
+            url=f"{self._host}:{self._port}{self.ENDPOINT_ENDPOINT}?{endpoint}"
+        ).content
 
     def download(
         self,
@@ -206,7 +211,9 @@ class DTNRESTClient:
 
     @property
     def endpoints(self) -> list:
-        eps: list = json.loads(requests.get(url=f"{self._host}:{self._port}{self.STATUS_EIDS}").content)
+        eps: list = json.loads(
+            requests.get(url=f"{self._host}:{self._port}{self.STATUS_EIDS}").content
+        )
         # eps = list(map(lambda ep: ep.rsplit("/", 1)[1], eps))
         return eps
 
@@ -216,7 +223,9 @@ class DTNRESTClient:
 
     @property
     def _raw_bundles(self) -> List[str]:
-        return json.loads(requests.get(url=f"{self._host}:{self._port}{self.STATUS_BUNDLES}").content)
+        return json.loads(
+            requests.get(url=f"{self._host}:{self._port}{self.STATUS_BUNDLES}").content
+        )
 
     @property
     def store(self) -> list:
@@ -241,4 +250,6 @@ class DTNRESTClient:
         return f"<DTNClient@{self._host}:{self._port}, node ID: {self._nodeid}>"
 
     def _get_nodeid(self) -> Optional[str]:
-        return requests.get(url=f"{self._host}:{self._port}{self.STATUS_NODEID}").content.decode("utf-8")
+        return requests.get(url=f"{self._host}:{self._port}{self.STATUS_NODEID}").content.decode(
+            "utf-8"
+        )
