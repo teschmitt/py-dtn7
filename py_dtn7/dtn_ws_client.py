@@ -169,16 +169,16 @@ class DTNWSClient:
         self._running = True
 
     def _on_message(self, ws: WebSocketApp, msg: Any) -> None:
-        # print(f"{msg=}")
+        # print(f"{msg}")
         # _log(msg)
         # self.messages.append(msg)
         self._callback(msg)
 
     def _on_error(self, ws: WebSocketApp, error) -> None:
-        print(f"{error=}")
+        print(f"{error}")
 
     def _on_close(self, ws: WebSocketApp, status_code, msg) -> None:
-        # print(f"{status_code=}, {msg=}")
+        # print(f"{status_code}, {msg}")
         self._running = False
         print("Connection closed")
 

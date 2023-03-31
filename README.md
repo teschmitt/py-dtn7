@@ -2,8 +2,13 @@
 
 [![Licence AGPL-3.0](https://img.shields.io/github/license/teschmitt/py-dtn7)](LICENSE)
 
-A Python wrapper library for the DTN7 REST and WebSocket API of [dtn7-rs](https://github.com/dtn7/dtn7-rs)
-including a rudimentary BP7 style `Bundle` typ.
+A Python wrapper library for the DTN7 REST and WebSocket API of [dtn7-rs](https://github.com/dtn7/dtn7-rs).
+The library includes a fully spec compliant `Bundle` type (but without fragment and CRC support), which allows full
+bundle creation and (de-)serialization.
+
+The `bundle.py`, `dtn_rest_client.py`, `utils.py` modules/files are Micropython compatible.
+But, this requires a bit of manual library management.
+Please refer to the Micropython installation guide below.
 
 ### Getting Started
 
@@ -49,3 +54,12 @@ otherwise we use the complete URI:
 >>> r.content.decode("utf-8")
 'Sent payload with 27 bytes'
 ```
+
+## Micropython Installation Guide
+
+To be extended:
+
+The dummy libraries `__future__.py`, `abc.py`, `typing.py`, the [micropython-cbor](https://github.com/alexmrqt/micropython-cbor/) library (specifically the `cbor.py` module/file) and `urequests` as well as `datetime` are needed:
+
+$ mpremote mip install urequests
+$ mpremote mip install datetime
