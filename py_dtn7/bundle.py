@@ -5,9 +5,10 @@ from __future__ import annotations
 from abc import ABC
 from typing import Optional, List, Tuple
 
-try:
+from utils import RUNNING_MICROPYTHON
+if not RUNNING_MICROPYTHON:
     from cbor2 import dumps, loads
-except ImportError:
+else:
     from cbor import dumps, loads
 
 from py_dtn7.utils import from_dtn_timestamp
