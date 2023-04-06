@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 
 from py_dtn7.utils import from_dtn_timestamp, RUNNING_MICROPYTHON
 
@@ -16,8 +16,13 @@ CRC_TYPE_NOCRC = 0
 CRC_TYPE_X25 = 1
 CRC_TYPE_CRC32C = 2
 
-URI_SCHEME_1 = "dtn"
-URI_SCHEME_2 = "ipn"
+URI_SCHEME_DTN_NAME = "dtn"
+URI_SCHEME_DTN_ENCODED = 1
+URI_SCHEME_IPN_NAME = "ipn"
+URI_SCHEME_IPN_ENCODED = 2
+
+NONE_ENDPOINT_SPECIFIC_PART_NAME = "//none"
+NONE_ENDPOINT_SPECIFIC_PART_ENCODED = 0
 
 ENCODING = "utf-8"
 
@@ -236,11 +241,11 @@ class PrimaryBlock:
         bundle_processing_control_flags: BundleProcessingControlFlags,
         crc_type: int,
         destination_scheme: int,
-        destination_specific_part: str,
+        destination_specific_part: Union[str, int, List[int]],
         source_scheme: int,
-        source_specific_part: str,
+        source_specific_part: Union[str, int, List[int]],
         report_to_scheme: int,
-        report_to_specific_part: str,
+        report_to_specific_part: Union[str, int, List[int]],
         bundle_creation_time: int,
         sequence_number: int,
         lifetime: int = 1000 * 3600 * 24,
@@ -337,33 +342,34 @@ class PrimaryBlock:
 
     @staticmethod
     def from_objects(
-        bundle_processing_control_flags: BundleProcessingControlFlags = BundleProcessingControlFlags(
-            0
-        ),
-        destination_scheme: int = 1,
-        destination_specific_part: str = "",
-        source_scheme: int = 1,
-        source_specific_part: str = "",
-        report_to_scheme: int = 1,
-        report_to_specific_part: str = "",
+        full_destination_uri: str,
+        full_source_uri: str = "dtn://none",
+        full_report_to_uri: str = "dtn://none",
+        bundle_processing_control_flags: BundleProcessingControlFlags = BundleProcessingControlFlags(0),
         bundle_creation_time: int = 0,
         sequence_number: int = 0,
         lifetime: int = 3600 * 24 * 1000,
     ):
-        return PrimaryBlock(
+        primary_block = PrimaryBlock(
             version=7,
             bundle_processing_control_flags=bundle_processing_control_flags,
             crc_type=0,
-            destination_scheme=destination_scheme,
-            destination_specific_part=destination_specific_part,
-            source_scheme=source_scheme,
-            source_specific_part=source_specific_part,
-            report_to_scheme=report_to_scheme,
-            report_to_specific_part=report_to_specific_part,
+            destination_scheme=1,
+            destination_specific_part="",
+            source_scheme=1,
+            source_specific_part="",
+            report_to_scheme=1,
+            report_to_specific_part="",
             bundle_creation_time=bundle_creation_time,
             sequence_number=sequence_number,
-            lifetime=lifetime,
+            lifetime=lifetime
         )
+
+        primary_block.full_destination_uri = full_destination_uri
+        primary_block.full_source_uri = full_source_uri
+        primary_block.full_report_to_uri = full_report_to_uri
+
+        return primary_block
 
     @property
     def bundle_creation_time_datetime(self):
@@ -381,31 +387,60 @@ class PrimaryBlock:
             raise IndexError("bundle uses unknown private uri scheme {}".format(scheme))
 
     @staticmethod
-    def scheme_to_uri(scheme: int):
-        if scheme == 1:
-            return URI_SCHEME_1
-        elif scheme == 2:
-            return URI_SCHEME_2
+    def from_full_uri(full_uri: str) -> Tuple[int, Union[str, int, List[int]]]:
+        scheme, specific_part = full_uri.split(":", 1)
+
+        if scheme == URI_SCHEME_DTN_NAME:
+            if specific_part == NONE_ENDPOINT_SPECIFIC_PART_NAME:
+                specific_part = NONE_ENDPOINT_SPECIFIC_PART_ENCODED
+
+            return URI_SCHEME_DTN_ENCODED, specific_part
         else:
-            raise IndexError("unknown uri scheme {}".format(scheme))
+            if specific_part == NONE_ENDPOINT_SPECIFIC_PART_NAME:
+                specific_part = NONE_ENDPOINT_SPECIFIC_PART_ENCODED
+            else:
+                specific_part = tuple(int(x) for x in specific_part[2:].split("."))
+
+            return URI_SCHEME_IPN_ENCODED, specific_part
+
+    @staticmethod
+    def to_full_uri(scheme: int, specific_part: Union[str, int, List[int]]) -> str:
+        if scheme == URI_SCHEME_DTN_ENCODED:
+            if specific_part == NONE_ENDPOINT_SPECIFIC_PART_ENCODED:
+                specific_part = NONE_ENDPOINT_SPECIFIC_PART_NAME
+
+            return "{}:{}".format(URI_SCHEME_DTN_NAME, specific_part)
+        else:
+            if specific_part == NONE_ENDPOINT_SPECIFIC_PART_ENCODED:
+                specific_part = NONE_ENDPOINT_SPECIFIC_PART_NAME
+            else:
+                specific_part = "//" + ".".join(str(x) for x in specific_part)
+
+            return "{}:{}".format(URI_SCHEME_IPN_NAME, specific_part)
 
     @property
     def full_source_uri(self):
-        return "{}:{}".format(
-            PrimaryBlock.scheme_to_uri(self.source_scheme), self.source_specific_part
-        )
+        return self.to_full_uri(self.source_scheme, self.source_specific_part)
+
+    @full_source_uri.setter
+    def full_source_uri(self, value):
+        self.source_scheme, self.source_specific_part = self.from_full_uri(value)
 
     @property
     def full_destination_uri(self):
-        return "{}:{}".format(
-            PrimaryBlock.scheme_to_uri(self.destination_scheme), self.destination_specific_part
-        )
+        return self.to_full_uri(self.destination_scheme, self.destination_specific_part)
+
+    @full_destination_uri.setter
+    def full_destination_uri(self, value):
+        self.destination_scheme, self.destination_specific_part = self.from_full_uri(value)
 
     @property
     def full_report_to_uri(self):
-        return "{}:{}".format(
-            PrimaryBlock.scheme_to_uri(self.report_to_scheme), self.report_to_specific_part
-        )
+        return self.to_full_uri(self.report_to_scheme, self.report_to_specific_part)
+
+    @full_report_to_uri.setter
+    def full_report_to_uri(self, value):
+        self.report_to_scheme, self.report_to_specific_part = self.from_full_uri(value)
 
 
 class CanonicalBlock(ABC):
@@ -532,7 +567,7 @@ class PreviousNodeBlock(CanonicalBlock):
     """
 
     @property
-    def previous_node_id(self) -> Tuple[int, str]:
+    def previous_node_id(self) -> Tuple[int, Union[str, int, List[int]]]:
         """
         :return: the node-id of the previous node as string
         """
@@ -540,17 +575,15 @@ class PreviousNodeBlock(CanonicalBlock):
 
     @staticmethod
     def from_objects(
-        node_id: Tuple[int, str],
-        block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(
-            0
-        ),
+        full_node_uri: str,
+        block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
     ):
         return PreviousNodeBlock(
             block_type_code=6,
             block_number=1,
             block_processing_control_flags=block_processing_control_flags,
             crc_type=0,
-            data=dumps(node_id),
+            data=dumps(PrimaryBlock.from_full_uri(full_node_uri)),
             crc=None,
         )
 
