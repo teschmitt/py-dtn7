@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "py-dtn7"
-version = "0.3.0a0"
+version = "0.3.0a1"
 description = ""
 authors = ["Thomas Schmitt <t.e.schmitt@posteo.de>"]
 
