@@ -1,6 +1,7 @@
 .idea/
 *.ipynb
 docs/
+.vscode/
 
 
 # Byte-compiled / optimized / DLL files
