@@ -56,6 +56,11 @@ class Flags:
 
         return result[:-2] + "]>"
 
+    def __eq__(self, other: Flags):
+        if not isinstance(other, Flags):
+            return NotImplemented
+        return self.flags == other.flags
+
 
 class BundleProcessingControlFlags(Flags):
     """
@@ -292,6 +297,25 @@ class PrimaryBlock:
             )
         )
 
+    def __eq__(self, other: PrimaryBlock) -> bool:
+        if not isinstance(other, PrimaryBlock):
+            return NotImplemented
+        attrs = [
+            "version",
+            "bundle_processing_control_flags",
+            "crc_type",
+            "destination_scheme",
+            "destination_specific_part",
+            "source_scheme",
+            "source_specific_part",
+            "report_to_scheme",
+            "report_to_specific_part",
+            "bundle_creation_time",
+            "sequence_number",
+            "lifetime",
+        ]
+        return all([self.__getattribute__(attr) == other.__getattribute__(attr) for attr in attrs])
+
     @staticmethod
     def from_block_data(primary_block: list) -> PrimaryBlock:
         """
@@ -345,7 +369,9 @@ class PrimaryBlock:
         full_destination_uri: str,
         full_source_uri: str = "dtn://none",
         full_report_to_uri: str = "dtn://none",
-        bundle_processing_control_flags: BundleProcessingControlFlags = BundleProcessingControlFlags(0),
+        bundle_processing_control_flags: BundleProcessingControlFlags = BundleProcessingControlFlags(
+            0
+        ),
         bundle_creation_time: int = 0,
         sequence_number: int = 0,
         lifetime: int = 3600 * 24 * 1000,
@@ -354,15 +380,15 @@ class PrimaryBlock:
             version=7,
             bundle_processing_control_flags=bundle_processing_control_flags,
             crc_type=0,
-            destination_scheme=1,
+            destination_scheme=URI_SCHEME_DTN_ENCODED,
             destination_specific_part="",
-            source_scheme=1,
+            source_scheme=URI_SCHEME_DTN_ENCODED,
             source_specific_part="",
-            report_to_scheme=1,
+            report_to_scheme=URI_SCHEME_DTN_ENCODED,
             report_to_specific_part="",
             bundle_creation_time=bundle_creation_time,
             sequence_number=sequence_number,
-            lifetime=lifetime
+            lifetime=lifetime,
         )
 
         primary_block.full_destination_uri = full_destination_uri
@@ -576,7 +602,9 @@ class PreviousNodeBlock(CanonicalBlock):
     @staticmethod
     def from_objects(
         full_node_uri: str,
-        block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(0),
+        block_processing_control_flags: BlockProcessingControlFlags = BlockProcessingControlFlags(
+            0
+        ),
     ):
         return PreviousNodeBlock(
             block_type_code=6,
