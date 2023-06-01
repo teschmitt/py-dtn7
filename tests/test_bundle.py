@@ -1,10 +1,14 @@
 from copy import deepcopy
+from mock import patch
 from unittest import TestCase
 
 from py_dtn7.bundle import *
 
 BUNDLE_CREATION_TIME: int = (3600 * 24 * 31 + 3600 * 9) * 1000  # 2000-01-31 09:00:00 +0000 (UTC)
 BUNDLE_LIFETIME: int = 3600 * 24 * 1000  # one day
+DESTINATION_SPECIFIC_PART: str = "//node1/incoming"
+SOURCE_SPECIFIC_PART: str = "//uav1/sink"
+REPORT_TO_SPECIFIC_PART: str = "//statistics/messages"
 
 
 class TestFlags(TestCase):
@@ -39,11 +43,11 @@ class TestPrimaryBlock(TestCase):
         bundle_processing_control_flags=BundleProcessingControlFlags(flags=0),
         crc_type=CRC_TYPE_NOCRC,
         destination_scheme=URI_SCHEME_DTN_ENCODED,
-        destination_specific_part="",
+        destination_specific_part=DESTINATION_SPECIFIC_PART,
         source_scheme=URI_SCHEME_DTN_ENCODED,
-        source_specific_part="",
+        source_specific_part=SOURCE_SPECIFIC_PART,
         report_to_scheme=URI_SCHEME_DTN_ENCODED,
-        report_to_specific_part="",
+        report_to_specific_part=REPORT_TO_SPECIFIC_PART,
         bundle_creation_time=BUNDLE_CREATION_TIME,
         sequence_number=0,
         lifetime=BUNDLE_LIFETIME,
@@ -57,9 +61,9 @@ class TestPrimaryBlock(TestCase):
                 7,
                 0,
                 CRC_TYPE_NOCRC,
-                (URI_SCHEME_DTN_ENCODED, ""),
-                (URI_SCHEME_DTN_ENCODED, ""),
-                (URI_SCHEME_DTN_ENCODED, ""),
+                (URI_SCHEME_DTN_ENCODED, DESTINATION_SPECIFIC_PART),
+                (URI_SCHEME_DTN_ENCODED, SOURCE_SPECIFIC_PART),
+                (URI_SCHEME_DTN_ENCODED, REPORT_TO_SPECIFIC_PART),
                 (BUNDLE_CREATION_TIME, 0),
                 BUNDLE_LIFETIME,
             )
@@ -71,9 +75,9 @@ class TestPrimaryBlock(TestCase):
             1337,
             0,
             CRC_TYPE_NOCRC,
-            (URI_SCHEME_DTN_ENCODED, ""),
-            (URI_SCHEME_DTN_ENCODED, ""),
-            (URI_SCHEME_DTN_ENCODED, ""),
+            (URI_SCHEME_DTN_ENCODED, DESTINATION_SPECIFIC_PART),
+            (URI_SCHEME_DTN_ENCODED, SOURCE_SPECIFIC_PART),
+            (URI_SCHEME_DTN_ENCODED, REPORT_TO_SPECIFIC_PART),
             (BUNDLE_CREATION_TIME, 0),
             BUNDLE_LIFETIME,
         )
@@ -160,7 +164,6 @@ class TestPrimaryBlock(TestCase):
         )
 
     def test_true_control_flags(self):
-        old_flags = self.primary_block.bundle_processing_control_flags.flags
         # 0x7FFFF sets bits 0..18 to true
         self.primary_block.bundle_processing_control_flags.flags = int(0x7FFFF)
         self.assertTrue(
@@ -178,7 +181,6 @@ class TestPrimaryBlock(TestCase):
                 ]
             )
         )
-        # self.primary_block.bundle_processing_control_flags.flags = old_flags
 
     def test_eq_operator(self):
         pb = deepcopy(self.primary_block)
@@ -189,11 +191,11 @@ class TestPrimaryBlock(TestCase):
             7,
             0,
             CRC_TYPE_NOCRC,
-            (URI_SCHEME_DTN_ENCODED, ""),
-            (URI_SCHEME_DTN_ENCODED, ""),
-            (URI_SCHEME_DTN_ENCODED, ""),
-            ((3600 * 24 * 31 + 3600 * 9) * 1000, 0),
-            3600 * 24 * 1000,
+            (URI_SCHEME_DTN_ENCODED, DESTINATION_SPECIFIC_PART),
+            (URI_SCHEME_DTN_ENCODED, SOURCE_SPECIFIC_PART),
+            (URI_SCHEME_DTN_ENCODED, REPORT_TO_SPECIFIC_PART),
+            (BUNDLE_CREATION_TIME, 0),
+            BUNDLE_LIFETIME,
         )
         self.assertEqual(pb_ut, self.primary_block.to_block_data())
 
@@ -203,3 +205,11 @@ class TestPrimaryBlock(TestCase):
             self.primary_block.bundle_creation_time_datetime,
             from_dtn_timestamp(BUNDLE_CREATION_TIME),
         )
+
+    @patch("py_dtn7.bundle.PrimaryBlock.to_full_uri")
+    def test_full_source_uri(self, mock_to_full_uri):
+        self.primary_block.full_source_uri
+        self.assertTrue(mock_to_full_uri.called)
+        print(mock_to_full_uri.call_args)
+        self.assertEqual(mock_to_full_uri.call_args[0][0], self.primary_block.source_scheme)
+        self.assertEqual(mock_to_full_uri.call_args[0][1], self.primary_block.source_specific_part)

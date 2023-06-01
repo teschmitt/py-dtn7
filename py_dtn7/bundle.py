@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from datetime import datetime
 from typing import Optional, List, Tuple, Union
 
 from py_dtn7.utils import from_dtn_timestamp, RUNNING_MICROPYTHON
