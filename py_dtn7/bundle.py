@@ -42,10 +42,10 @@ class Flags:
     def unset_flag(self, bit: int):
         self.flags &= ~(1 << bit)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return hex(self.flags)
 
-    def __str__(self):
+    def __str__(self) -> str:
         result = "<{}: [".format(self.__class__.__name__)
 
         attributes_to_ignore = dir(Flags)
@@ -56,7 +56,7 @@ class Flags:
 
         return result[:-2] + "]>"
 
-    def __eq__(self, other: Flags):
+    def __eq__(self, other: Flags) -> bool:
         if not isinstance(other, Flags):
             return NotImplemented
         return self.flags == other.flags
@@ -398,36 +398,43 @@ class PrimaryBlock:
         return primary_block
 
     @property
-    def bundle_creation_time_datetime(self):
+    def bundle_creation_time_datetime(self) -> datetime:
         return from_dtn_timestamp(self.bundle_creation_time)
 
     @staticmethod
-    def check_uri_scheme(scheme: int):
-        if scheme == 0:
-            raise IndexError("bundle uses reserved uri scheme 0")
+    def check_uri_scheme(scheme: int) -> None:
+        if scheme < 0:
+            raise ValueError("bundle scheme code must be an unsigned integer")
+        elif scheme == 0:
+            raise ValueError("bundle uses reserved uri scheme 0")
         elif 3 <= scheme <= 254:
-            raise IndexError("bundle uses unassigned uri scheme {}".format(scheme))
+            raise ValueError("bundle uses unassigned uri scheme {}".format(scheme))
         elif 255 <= scheme <= 65535:
-            raise IndexError("bundle uses reserved uri scheme {}".format(scheme))
+            raise ValueError("bundle uses reserved uri scheme {}".format(scheme))
         elif scheme > 65535:
-            raise IndexError("bundle uses unknown private uri scheme {}".format(scheme))
+            raise ValueError("bundle uses unknown private uri scheme {}".format(scheme))
 
     @staticmethod
     def from_full_uri(full_uri: str) -> Tuple[int, Union[str, int, List[int]]]:
-        scheme, specific_part = full_uri.split(":", 1)
+        scheme, specific_part = full_uri.split(sep=":", maxsplit=1)
 
         if scheme == URI_SCHEME_DTN_NAME:
             if specific_part == NONE_ENDPOINT_SPECIFIC_PART_NAME:
                 specific_part = NONE_ENDPOINT_SPECIFIC_PART_ENCODED
 
             return URI_SCHEME_DTN_ENCODED, specific_part
-        else:
+        elif scheme == URI_SCHEME_IPN_NAME:
             if specific_part == NONE_ENDPOINT_SPECIFIC_PART_NAME:
                 specific_part = NONE_ENDPOINT_SPECIFIC_PART_ENCODED
             else:
                 specific_part = tuple(int(x) for x in specific_part[2:].split("."))
-
+                if len(specific_part) != 2 or any([x < 0 for x in specific_part]):
+                    raise ValueError(
+                        "IPN scheme only allows pairs of unsigned integers as endpoint IDs"
+                    )
             return URI_SCHEME_IPN_ENCODED, specific_part
+        else:
+            raise ValueError("Invalid URI scheme name: {}".format(scheme))
 
     @staticmethod
     def to_full_uri(scheme: int, specific_part: Union[str, int, List[int]]) -> str:
@@ -436,36 +443,42 @@ class PrimaryBlock:
                 specific_part = NONE_ENDPOINT_SPECIFIC_PART_NAME
 
             return "{}:{}".format(URI_SCHEME_DTN_NAME, specific_part)
-        else:
+        elif scheme == URI_SCHEME_IPN_ENCODED:
             if specific_part == NONE_ENDPOINT_SPECIFIC_PART_ENCODED:
                 specific_part = NONE_ENDPOINT_SPECIFIC_PART_NAME
             else:
+                if len(specific_part) != 2 or any([x < 0 for x in specific_part]):
+                    raise ValueError(
+                        "IPN scheme only allows pairs of unsigned integers as endpoint IDs"
+                    )
                 specific_part = "//" + ".".join(str(x) for x in specific_part)
 
             return "{}:{}".format(URI_SCHEME_IPN_NAME, specific_part)
+        else:
+            raise ValueError("Invalid URI scheme code: {}".format(scheme))
 
     @property
-    def full_source_uri(self):
+    def full_source_uri(self) -> str:
         return self.to_full_uri(self.source_scheme, self.source_specific_part)
 
     @full_source_uri.setter
-    def full_source_uri(self, value):
+    def full_source_uri(self, value) -> None:
         self.source_scheme, self.source_specific_part = self.from_full_uri(value)
 
     @property
-    def full_destination_uri(self):
+    def full_destination_uri(self) -> str:
         return self.to_full_uri(self.destination_scheme, self.destination_specific_part)
 
     @full_destination_uri.setter
-    def full_destination_uri(self, value):
+    def full_destination_uri(self, value) -> None:
         self.destination_scheme, self.destination_specific_part = self.from_full_uri(value)
 
     @property
-    def full_report_to_uri(self):
+    def full_report_to_uri(self) -> str:
         return self.to_full_uri(self.report_to_scheme, self.report_to_specific_part)
 
     @full_report_to_uri.setter
-    def full_report_to_uri(self, value):
+    def full_report_to_uri(self, value) -> None:
         self.report_to_scheme, self.report_to_specific_part = self.from_full_uri(value)
 
 
