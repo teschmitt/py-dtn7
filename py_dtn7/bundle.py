@@ -2,9 +2,8 @@
 # more info: https://stackoverflow.com/a/33533514
 from __future__ import annotations
 
-from abc import ABC
 from datetime import datetime
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Self, Tuple, Union
 
 from py_dtn7.utils import from_dtn_timestamp, RUNNING_MICROPYTHON
 
@@ -327,7 +326,7 @@ class PrimaryBlock:
             11 if the bundle is a fragment and has a CRC
         """
         if len(primary_block) < 8 or len(primary_block) > 11:
-            raise IndexError(
+            raise ValueError(
                 "primary block has invalid number of items: {}, should be in [8, 11]".format(
                     len(primary_block)
                 )
@@ -351,7 +350,7 @@ class PrimaryBlock:
                 lifetime=primary_block[7],
             )
         except IndexError as e:
-            raise IndexError("Passed CBOR data is not a valid bundle: {}".format(e))
+            raise ValueError("Passed CBOR data is not a valid bundle: {}".format(e))
 
     def to_block_data(self):
         return (
@@ -483,7 +482,7 @@ class PrimaryBlock:
         self.report_to_scheme, self.report_to_specific_part = self.from_full_uri(value)
 
 
-class CanonicalBlock(ABC):
+class CanonicalBlock:
     def __init__(
         self,
         block_type_code: int,
@@ -509,8 +508,8 @@ class CanonicalBlock(ABC):
             self.data,
         )
 
-    @staticmethod
-    def from_block_data(block: list) -> CanonicalBlock:
+    @classmethod
+    def from_block_data(cls, block: list) -> CanonicalBlock:
         # todo: move checks to init
 
         """
@@ -528,12 +527,22 @@ class CanonicalBlock(ABC):
         block_type = block[0]
 
         if block_type == 1:
+            if cls is not CanonicalBlock and cls is not PayloadBlock:
+                raise ValueError("'block_type_code' 1 not correct for instantiating {}".format(cls))
             cls = PayloadBlock
         elif block_type == 6:
+            if cls is not CanonicalBlock and cls is not PreviousNodeBlock:
+                raise ValueError("'block_type_code' 6 not correct for instantiating {}".format(cls))
             cls = PreviousNodeBlock
         elif block_type == 7:
+            if cls is not CanonicalBlock and cls is not BundleAgeBlock:
+                raise ValueError("'block_type_code' 7 not correct for instantiating {}".format(cls))
             cls = BundleAgeBlock
         elif block_type == 10:
+            if cls is not CanonicalBlock and cls is not HopCountBlock:
+                raise ValueError(
+                    "'block_type_code' 10 not correct for instantiating {}".format(cls)
+                )
             cls = HopCountBlock
         elif 11 <= block_type <= 191:
             print(
