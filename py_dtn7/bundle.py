@@ -508,6 +508,18 @@ class CanonicalBlock:
             self.data,
         )
 
+    def __eq__(self, other: CanonicalBlock) -> bool:
+        if not isinstance(other, CanonicalBlock):
+            return NotImplemented
+        attrs = [
+            "block_type_code",
+            "block_number",
+            "block_processing_control_flags",
+            "crc_type",
+            "data",
+        ]
+        return all([self.__getattribute__(attr) == other.__getattribute__(attr) for attr in attrs])
+
     @classmethod
     def from_block_data(cls, block: list) -> CanonicalBlock:
         # todo: move checks to init
@@ -518,7 +530,7 @@ class CanonicalBlock:
             6 if the block has CRC
         """
         if len(block) < 5 or len(block) > 6:
-            raise IndexError(
+            raise ValueError(
                 "block has invalid number of items: {}, should be in [5, 6]".format(len(block))
             )
         if len(block) == 6:

@@ -186,7 +186,28 @@ class TestPrimaryBlock(TestCase):
         # better safe than sorry:
         lengths = list(range(8)) + list(range(12, 65))
         for ell in lengths:
-            self.assertRaises(IndexError, PrimaryBlock.from_block_data, [0 for _ in range(ell)])
+            self.assertRaises(ValueError, PrimaryBlock.from_block_data, [0 for _ in range(ell)])
+
+    def test_crc_and_fragments_not_implemented_error(self):
+        # CRC and fragments are not supported yet, so block data with certain lengths are refused with an error
+        lengths = [9, 10, 11]
+        for ell in lengths:
+            self.assertRaises(
+                NotImplementedError, PrimaryBlock.from_block_data, [0 for _ in range(ell)]
+            )
+
+    def test_invalid_bundle_data(self):
+        pb = (
+            7,
+            CONTROL_FLAGS,
+            CRC_TYPE_NOCRC,
+            [URI_SCHEME_DTN_ENCODED],  # indexing into block data will fail here
+            (URI_SCHEME_DTN_ENCODED, SOURCE_SPECIFIC_PART),
+            (URI_SCHEME_DTN_ENCODED, REPORT_TO_SPECIFIC_PART),
+            (BUNDLE_CREATION_TIME, SEQ_NUMBER),
+            BUNDLE_LIFETIME,
+        )
+        self.assertRaises(ValueError, PrimaryBlock.from_block_data, pb)
 
     def test_check_invalid_uri_schemes(self):
         # must raise a ValueError since:
@@ -295,21 +316,110 @@ class TestPrimaryBlock(TestCase):
     @mock.patch.object(PrimaryBlock, "from_full_uri", return_value=(1, 2))
     def test_full_source_uri_setter(self, mock_from_full_uri):
         mock_from_full_uri.return_value = (1, 2)
-        self.primary_block.full_source_uri = 1337
+        self.primary_block.full_source_uri = 42
         self.assertTrue(mock_from_full_uri.called)
-        self.assertEqual(mock_from_full_uri.call_args[0][0], 1337)
+        self.assertEqual(mock_from_full_uri.call_args[0][0], 42)
         mock_from_full_uri.stop()
 
     @mock.patch.object(PrimaryBlock, "from_full_uri", return_value=(3, 4))
     def test_full_destination_uri_setter(self, mock_from_full_uri):
         mock_from_full_uri.return_value = (3, 4)
-        self.primary_block.full_destination_uri = 1337
+        self.primary_block.full_destination_uri = 42
         self.assertTrue(mock_from_full_uri.called)
-        self.assertEqual(mock_from_full_uri.call_args[0][0], 1337)
+        self.assertEqual(mock_from_full_uri.call_args[0][0], 42)
         mock_from_full_uri.stop()
 
     @mock.patch.object(PrimaryBlock, "from_full_uri", return_value=(5, 6))
     def test_full_report_to_uri_setter(self, mock_from_full_uri):
-        self.primary_block.full_report_to_uri = 1337
+        self.primary_block.full_report_to_uri = 42
         self.assertTrue(mock_from_full_uri.called)
-        self.assertEqual(mock_from_full_uri.call_args[0][0], 1337)
+        self.assertEqual(mock_from_full_uri.call_args[0][0], 42)
+
+
+class TestCanonicalBlock(TestCase):
+    def setUp(self):
+        self.block_data_plb = (1, 1, 42, 0, b"123456790")
+        self.block_data_pnb = (6, 2, 42, 0, b"123456790")
+        self.block_data_bab = (7, 3, 42, 0, b"123456790")
+        self.block_data_hcb = (10, 4, 42, 0, b"123456790")
+        self.canonical_block_plb = PayloadBlock(1, 1, Flags(42), 0, b"123456790")
+        self.canonical_block_pnb = PreviousNodeBlock(6, 2, Flags(42), 0, b"123456790")
+        self.canonical_block_bab = BundleAgeBlock(7, 3, Flags(42), 0, b"123456790")
+        self.canonical_block_hcb = HopCountBlock(10, 4, Flags(42), 0, b"123456790")
+
+    def test_from_block_data_returns_correct_types(self):
+        self.assertTrue(
+            isinstance(CanonicalBlock.from_block_data(self.block_data_plb), PayloadBlock)
+        )
+        self.assertTrue(
+            isinstance(CanonicalBlock.from_block_data(self.block_data_pnb), PreviousNodeBlock)
+        )
+        self.assertTrue(
+            isinstance(CanonicalBlock.from_block_data(self.block_data_bab), BundleAgeBlock)
+        )
+        self.assertTrue(
+            isinstance(CanonicalBlock.from_block_data(self.block_data_hcb), HopCountBlock)
+        )
+
+    def test_from_block_data_returns_correct_blocks(self):
+        self.assertEqual(
+            CanonicalBlock.from_block_data(self.block_data_plb), self.canonical_block_plb
+        )
+        self.assertEqual(
+            CanonicalBlock.from_block_data(self.block_data_pnb), self.canonical_block_pnb
+        )
+        self.assertEqual(
+            CanonicalBlock.from_block_data(self.block_data_bab), self.canonical_block_bab
+        )
+        self.assertEqual(
+            CanonicalBlock.from_block_data(self.block_data_hcb), self.canonical_block_hcb
+        )
+
+    @mock.patch("builtins.print")
+    def test_from_block_data_warnings_on_other_block_types(self, mock_print):
+        for block_type in range(11, 256):
+            block_data = [block_type, 23, 42, 0, b"0987654321"]
+            self.assertTrue(type(CanonicalBlock.from_block_data(block_data)) is CanonicalBlock)
+            self.assertTrue(mock_print.called)
+
+    def test_from_block_data_errors_on_unimplemented_block_types(self):
+        for block_type in range(256, 10000):
+            block_data = [block_type, 23, 42, 0, b"0987654321"]
+            self.assertRaises(NotImplementedError, CanonicalBlock.from_block_data, block_data)
+        for block_type in range(-10000, 1):
+            block_data = [block_type, 23, 42, 0, b"0987654321"]
+            self.assertRaises(NotImplementedError, CanonicalBlock.from_block_data, block_data)
+
+    def test_from_block_data_unsupported_lengths(self):
+        for ell in range(5):
+            self.assertRaises(
+                ValueError,
+                CanonicalBlock.from_block_data,
+                [0 for _ in range(ell)],
+            )
+        for ell in range(7, 1000):
+            self.assertRaises(
+                ValueError,
+                CanonicalBlock.from_block_data,
+                [0 for _ in range(ell)],
+            )
+        self.assertRaises(NotImplementedError, CanonicalBlock.from_block_data, [0] * 6)
+
+    def test_to_block_data_returns_correct_block_data(self):
+        self.assertEqual(
+            CanonicalBlock.to_block_data(self.canonical_block_plb), self.block_data_plb
+        )
+        self.assertEqual(
+            CanonicalBlock.to_block_data(self.canonical_block_pnb), self.block_data_pnb
+        )
+        self.assertEqual(
+            CanonicalBlock.to_block_data(self.canonical_block_bab), self.block_data_bab
+        )
+        self.assertEqual(
+            CanonicalBlock.to_block_data(self.canonical_block_hcb), self.block_data_hcb
+        )
+
+
+def TestPayloadBlock(TestCase):
+    def setUp(self):
+        self.payload_block = PayloadBlock()
