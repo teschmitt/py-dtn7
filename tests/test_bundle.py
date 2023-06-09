@@ -24,6 +24,11 @@ class TestFlags(TestCase):
     def test_get_all_true_flags(self):
         self.assertTrue(all([self.f_all_true.get_flag(bit) for bit in range(128)]))
 
+    def test_invalid_argument(self):
+        self.assertRaises(TypeError, Flags, Flags(0))
+        self.assertRaises(TypeError, Flags, "1")
+        self.assertRaises(TypeError, Flags, 3.14150265)
+
     def test_set_all_flags(self):
         f = deepcopy(self.f_all_false)
         for bit in range(128):
@@ -420,6 +425,44 @@ class TestCanonicalBlock(TestCase):
         )
 
 
-def TestPayloadBlock(TestCase):
+class TestPayloadBlock(TestCase):
     def setUp(self):
-        self.payload_block = PayloadBlock()
+        self.payload_block = PayloadBlock(1, 1, Flags(42), 0, b"123456790")
+
+    def test_from_objects_return_correct_bloc(self):
+        self.assertEquals(PayloadBlock.from_objects(b"123456790", Flags(42)), self.payload_block)
+
+
+class TestPreviousNodeBlock(TestCase):
+    def setUp(self):
+        self.uri_1 = "dtn://node1/incoming"
+        self.uri_2 = "ipn://1234.5678"
+        self.prev_node_1 = PreviousNodeBlock(
+            6, 1, Flags(42), 0, dumps(PrimaryBlock.from_full_uri(self.uri_1))
+        )
+        self.prev_node_2 = PreviousNodeBlock(
+            6, 1, Flags(42), 0, dumps(PrimaryBlock.from_full_uri(self.uri_2))
+        )
+
+    def test_previous_node_id_returns_correct_uri(self):
+        self.assertEqual(self.prev_node_1.previous_node_id, [1, "//node1/incoming"])
+        self.assertEqual(self.prev_node_2.previous_node_id, [2, [1234, 5678]])
+
+    def test_from_objects_returns_correct_block(self):
+        self.assertEqual(PreviousNodeBlock.from_objects(self.uri_1, Flags(42)), self.prev_node_1)
+        self.assertEqual(PreviousNodeBlock.from_objects(self.uri_2, Flags(42)), self.prev_node_2)
+
+
+class TestBundleAgeBlock(TestCase):
+    def setUp(self):
+        self.age = 1234567
+        self.bundle_age_block = BundleAgeBlock(7, 1, Flags(42), 0, dumps(self.age))
+
+    def test_age_milliseconds_getter(self):
+        self.assertEqual(self.age, self.bundle_age_block.age_milliseconds)
+
+    def test_age_milliseconds_setter(self):
+        bab = BundleAgeBlock(7, 1, Flags(42), 0, dumps(0))
+        self.assertEqual(loads(bab.data), 0)
+        bab.age_milliseconds = self.age
+        self.assertEqual(self.age, self.bundle_age_block.age_milliseconds)
