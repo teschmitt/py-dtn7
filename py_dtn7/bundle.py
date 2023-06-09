@@ -31,6 +31,8 @@ class Flags:
     flags: int = 0  # repr ignores all class attributes, so flags also needs to be one
 
     def __init__(self, flags: int = 0):
+        if not isinstance(flags, int):
+            raise TypeError
         self.flags = flags
 
     def get_flag(self, bit: int) -> bool:
@@ -511,6 +513,8 @@ class CanonicalBlock:
     def __eq__(self, other: CanonicalBlock) -> bool:
         if not isinstance(other, CanonicalBlock):
             return NotImplemented
+        if self.__class__ is not other.__class__:
+            return False
         attrs = [
             "block_type_code",
             "block_number",
