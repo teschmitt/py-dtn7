@@ -27,7 +27,7 @@ class TestFlags(TestCase):
     def test_invalid_argument(self):
         self.assertRaises(TypeError, Flags, Flags(0))
         self.assertRaises(TypeError, Flags, "1")
-        self.assertRaises(TypeError, Flags, 3.14150265)
+        self.assertRaises(TypeError, Flags, 3.14159265)
 
     def test_set_all_flags(self):
         f = deepcopy(self.f_all_false)
@@ -466,3 +466,73 @@ class TestBundleAgeBlock(TestCase):
         self.assertEqual(loads(bab.data), 0)
         bab.age_milliseconds = self.age
         self.assertEqual(self.age, self.bundle_age_block.age_milliseconds)
+
+
+class TestHopCountBlock(TestCase):
+    def setUp(self):
+        self.hop_count = (98, 76)
+        self.hop_count_block = HopCountBlock(10, 1, Flags(42), 0, dumps(self.hop_count))
+
+    def test_from_objects_returns_correct_block(self):
+        self.assertEqual(self.hop_count_block, HopCountBlock.from_objects(98, 76, Flags(42)))
+
+    def test_hop_count_setter(self):
+        hcb = HopCountBlock(10, 1, Flags(42), 0, dumps((98, 0)))
+        self.assertEqual(loads(hcb.data), [98, 0])
+        hcb.hop_count = 76
+        self.assertEqual(hcb, self.hop_count_block)
+
+    def test_hop_count_getter(self):
+        self.assertEqual(self.hop_count_block.hop_count, self.hop_count[1])
+
+    def test_hop_limit_getter(self):
+        self.assertEqual(self.hop_count_block.hop_limit, self.hop_count[0])
+
+
+class TestBundle(TestCase):
+    def setUp(self):
+        self.canonical_block_plb = PayloadBlock(1, 0, Flags(42), 0, b"123456790")
+        self.canonical_block_pnb = PreviousNodeBlock(
+            6, 0, Flags(42), 0, dumps(PrimaryBlock.from_full_uri("dtn://node1/incoming"))
+        )
+        self.canonical_block_bab = BundleAgeBlock(7, 0, Flags(42), 0, dumps(1234567))
+        self.canonical_block_hcb = HopCountBlock(10, 0, Flags(42), 0, dumps((98, 76)))
+        self.other_block = CanonicalBlock(192, 0, Flags(37), 0, b"123123123")
+        self.primary_block = PrimaryBlock(
+            version=7,
+            bundle_processing_control_flags=BundleProcessingControlFlags(flags=CONTROL_FLAGS),
+            crc_type=CRC_TYPE_NOCRC,
+            destination_scheme=URI_SCHEME_DTN_ENCODED,
+            destination_specific_part=DESTINATION_SPECIFIC_PART,
+            source_scheme=URI_SCHEME_DTN_ENCODED,
+            source_specific_part=SOURCE_SPECIFIC_PART,
+            report_to_scheme=URI_SCHEME_DTN_ENCODED,
+            report_to_specific_part=REPORT_TO_SPECIFIC_PART,
+            bundle_creation_time=BUNDLE_CREATION_TIME,
+            sequence_number=SEQ_NUMBER,
+            lifetime=BUNDLE_LIFETIME,
+        )
+
+    def test_correct_block_numbering_full_bundle(self):
+        bundle = Bundle(
+            self.primary_block,
+            self.canonical_block_pnb,
+            self.canonical_block_bab,
+            self.canonical_block_hcb,
+            self.canonical_block_plb,
+            [  # other_blocks
+                self.other_block,
+                self.other_block,
+                self.other_block,
+                self.other_block,
+            ],
+        )
+        self.assertEqual(bundle.previous_node_block.block_number, 0)
+        self.assertEqual(bundle.bundle_age_block.block_number, 1)
+        self.assertEqual(bundle.hop_count_block.block_number, 2)
+        self.assertEqual(bundle.payload_block.block_number, 3)
+        # payload block is block 4?
+        self.assertEqual(bundle.other_blocks[0].block_number, 5)
+        self.assertEqual(bundle.other_blocks[1].block_number, 5)
+        self.assertEqual(bundle.other_blocks[2].block_number, 5)
+        self.assertEqual(bundle.other_blocks[3].block_number, 5)
