@@ -771,7 +771,7 @@ class Bundle:
         bundle_age_block: Optional[BundleAgeBlock] = None,
         hop_count_block: Optional[HopCountBlock] = None,
         payload_block: Optional[PayloadBlock] = None,
-        other_blocks: Optional[List[CanonicalBlock]] = None,
+        other_blocks: Optional[List[CanonicalBlock]] = [],
     ):
         self.primary_block = primary_block
         self.previous_node_block: Optional[PreviousNodeBlock] = None
@@ -854,8 +854,11 @@ class Bundle:
         if isinstance(block, PayloadBlock):
             block.block_number = 1
         else:
-            block.block_number = self._cur_block_number
-            self._cur_block_number += 1  # TBD: make this thread-safe
+            try:
+                block.block_number = self._cur_block_number
+                self._cur_block_number += 1  # TBD: make this thread-safe
+            except AttributeError:
+                return  # if block is None
 
         # assign block to appropriate field
         block_type = type(block)
@@ -864,22 +867,25 @@ class Bundle:
             setattr(self, block_field, block)
         else:
             if block_type is CanonicalBlock:
-                self.other_blocks.append(block)
+                try:
+                    self.other_blocks.append(block)
+                except AttributeError:  # self.other_blocks is probably None
+                    self.other_blocks = [block]
             else:
-                raise ValueError(format("{} already present in this bundle", block_type))
+                raise ValueError(format("{} already present in this bundle", block_type.__name__))
 
     def remove_block(self, block):
         if self.primary_block == block:
             self.primary_block = None
-        if self.previous_node_block == block:
+        elif self.previous_node_block == block:
             self.previous_node_block = None
-        if self.bundle_age_block == block:
+        elif self.bundle_age_block == block:
             self.bundle_age_block = None
-        if self.hop_count_block == block:
+        elif self.hop_count_block == block:
             self.hop_count_block = None
-        if self.payload_block == block:
+        elif self.payload_block == block:
             self.payload_block = None
-        if block in self.other_blocks:
+        elif block in self.other_blocks:
             self.other_blocks.remove(block)
 
     @property
