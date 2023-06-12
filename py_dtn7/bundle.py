@@ -758,6 +758,12 @@ class HopCountBlock(CanonicalBlock):
 
 
 class Bundle:
+    """
+    Standard BP7 Bundle implementation.
+
+    This implementation is not thread-safe!
+    """
+
     def __init__(
         self,
         primary_block: PrimaryBlock,
@@ -774,22 +780,26 @@ class Bundle:
         self.payload_block: Optional[PayloadBlock] = None
         self.other_blocks: Optional[List[CanonicalBlock]] = []
 
-        # hacky workaround to check and set a correct node numbering if needed
+        self._cur_block_number = 2
+        self._block_type_dict = {
+            PreviousNodeBlock: "previous_node_block",
+            BundleAgeBlock: "bundle_age_block",
+            HopCountBlock: "hop_count_block",
+            PayloadBlock: "payload_block",
+            CanonicalBlock: "other_blocks",
+        }
 
-        if previous_node_block is not None:
-            self.insert_canonical_block(previous_node_block)
-        if bundle_age_block is not None:
-            self.insert_canonical_block(bundle_age_block)
-        if hop_count_block is not None:
-            self.insert_canonical_block(hop_count_block)
-        if payload_block is not None:
-            self.insert_canonical_block(payload_block)
-        if other_blocks is not None:
-            for block in other_blocks:
-                self.insert_canonical_block(block)
+        for block in [
+            previous_node_block,
+            bundle_age_block,
+            hop_count_block,
+            payload_block,
+            *other_blocks,
+        ]:
+            self.insert_canonical_block(block)
 
         if self.primary_block.bundle_creation_time == 0 and self.bundle_age_block is None:
-            raise IndexError("No bundle age block given, although creation time is zero")
+            raise ValueError("No bundle age block given, although creation time is zero")
 
     @staticmethod
     def from_cbor(data: bytes) -> Bundle:
@@ -840,20 +850,23 @@ class Bundle:
         )
 
     def insert_canonical_block(self, block: CanonicalBlock):
-        used_block_numbers = tuple(
-            set(b.block_number for b in self._get_all_used_canonical_blocks())
-        )
+        # overwrite block number with correct value
+        if isinstance(block, PayloadBlock):
+            block.block_number = 1
+        else:
+            block.block_number = self._cur_block_number
+            self._cur_block_number += 1  # TBD: make this thread-safe
 
-        new_block_number = block.block_number
-
-        if new_block_number in used_block_numbers:
-            new_block_number = 1
-            while new_block_number in used_block_numbers:
-                new_block_number += 1
-
-        block.block_number = new_block_number
-
-        self._set_canonical_block_var(block)
+        # assign block to appropriate field
+        block_type = type(block)
+        block_field = self._block_type_dict[block_type]
+        if getattr(self, block_field) is None:
+            setattr(self, block_field, block)
+        else:
+            if block_type is CanonicalBlock:
+                self.other_blocks.append(block)
+            else:
+                raise ValueError(format("{} already present in this bundle", block_type))
 
     def remove_block(self, block):
         if self.primary_block == block:
@@ -896,27 +909,3 @@ class Bundle:
         all_canonical_blocks += tuple(self.other_blocks)
 
         return (block for block in all_canonical_blocks if block is not None)
-
-    def _set_canonical_block_var(self, block: CanonicalBlock):
-        if isinstance(block, PreviousNodeBlock):
-            if self.previous_node_block is None:
-                self.previous_node_block = block
-            else:
-                raise IndexError("Previous node block occurs more than once")
-        elif isinstance(block, BundleAgeBlock):
-            if self.bundle_age_block is None:
-                self.bundle_age_block = block
-            else:
-                raise IndexError("Bundle age block occurs more than once")
-        elif isinstance(block, HopCountBlock):
-            if self.hop_count_block is None:
-                self.hop_count_block = block
-            else:
-                raise IndexError("Hop count block occurs more than once")
-        elif isinstance(block, PayloadBlock):
-            if self.payload_block is None:
-                self.payload_block = block
-            else:
-                raise IndexError("Payload block occurs more than once")
-        else:
-            self.other_blocks.append(block)

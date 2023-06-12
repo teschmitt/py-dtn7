@@ -514,6 +514,12 @@ class TestBundle(TestCase):
         )
 
     def test_correct_block_numbering_full_bundle(self):
+        # https://datatracker.ietf.org/doc/html/rfc9171#section-4.1-5
+        # The block number uniquely identifies the block within the bundle, enabling blocks
+        # (notably Bundle Protocol Security blocks) to reference other blocks in the same bundle
+        # without ambiguity. The block number of the primary block is implicitly zero; [...]
+        # Block numbering is unrelated to the order in which blocks are sequenced in the bundle.
+        # The block number of the payload block is always 1.
         bundle = Bundle(
             self.primary_block,
             self.canonical_block_pnb,
@@ -521,18 +527,22 @@ class TestBundle(TestCase):
             self.canonical_block_hcb,
             self.canonical_block_plb,
             [  # other_blocks
-                self.other_block,
-                self.other_block,
-                self.other_block,
+                deepcopy(self.other_block),
+                deepcopy(self.other_block),
+                deepcopy(self.other_block),
                 self.other_block,
             ],
         )
-        self.assertEqual(bundle.previous_node_block.block_number, 0)
-        self.assertEqual(bundle.bundle_age_block.block_number, 1)
-        self.assertEqual(bundle.hop_count_block.block_number, 2)
-        self.assertEqual(bundle.payload_block.block_number, 3)
-        # payload block is block 4?
-        self.assertEqual(bundle.other_blocks[0].block_number, 5)
-        self.assertEqual(bundle.other_blocks[1].block_number, 5)
-        self.assertEqual(bundle.other_blocks[2].block_number, 5)
-        self.assertEqual(bundle.other_blocks[3].block_number, 5)
+        block_nums = [
+            bundle.previous_node_block.block_number,
+            bundle.bundle_age_block.block_number,
+            bundle.hop_count_block.block_number,
+            bundle.payload_block.block_number,
+            bundle.other_blocks[0].block_number,
+            bundle.other_blocks[1].block_number,
+            bundle.other_blocks[2].block_number,
+            bundle.other_blocks[3].block_number,
+        ]
+        self.assertNotIn(0, block_nums)
+        self.assertEqual(bundle.payload_block.block_number, 1)
+        self.assertEqual(len(block_nums), len(set(block_nums)))
