@@ -497,7 +497,6 @@ class TestBundle(TestCase):
         )
         self.canonical_block_bab = BundleAgeBlock(7, 0, Flags(42), 0, dumps(1234567))
         self.canonical_block_hcb = HopCountBlock(10, 0, Flags(42), 0, dumps((98, 76)))
-        self.other_block = CanonicalBlock(192, 0, Flags(37), 0, b"123123123")
         self.primary_block = PrimaryBlock(
             version=7,
             bundle_processing_control_flags=BundleProcessingControlFlags(flags=CONTROL_FLAGS),
@@ -508,9 +507,22 @@ class TestBundle(TestCase):
             source_specific_part=SOURCE_SPECIFIC_PART,
             report_to_scheme=URI_SCHEME_DTN_ENCODED,
             report_to_specific_part=REPORT_TO_SPECIFIC_PART,
-            bundle_creation_time=BUNDLE_CREATION_TIME,
+            bundle_creation_time=0,
             sequence_number=SEQ_NUMBER,
             lifetime=BUNDLE_LIFETIME,
+        )
+        self.full_bundle = Bundle(
+            self.primary_block,
+            self.canonical_block_pnb,
+            self.canonical_block_bab,
+            self.canonical_block_hcb,
+            self.canonical_block_plb,
+            [  # other_blocks
+                CanonicalBlock(192, 0, Flags(37), 0, b"123123123"),
+                CanonicalBlock(193, 0, Flags(38), 0, b"123123123"),
+                CanonicalBlock(194, 0, Flags(39), 0, b"123123123"),
+                CanonicalBlock(195, 0, Flags(40), 0, b"123123123"),
+            ],
         )
 
     def test_correct_block_numbering_full_bundle(self):
@@ -520,29 +532,73 @@ class TestBundle(TestCase):
         # without ambiguity. The block number of the primary block is implicitly zero; [...]
         # Block numbering is unrelated to the order in which blocks are sequenced in the bundle.
         # The block number of the payload block is always 1.
-        bundle = Bundle(
-            self.primary_block,
-            self.canonical_block_pnb,
-            self.canonical_block_bab,
-            self.canonical_block_hcb,
-            self.canonical_block_plb,
-            [  # other_blocks
-                deepcopy(self.other_block),
-                deepcopy(self.other_block),
-                deepcopy(self.other_block),
-                self.other_block,
-            ],
-        )
         block_nums = [
-            bundle.previous_node_block.block_number,
-            bundle.bundle_age_block.block_number,
-            bundle.hop_count_block.block_number,
-            bundle.payload_block.block_number,
-            bundle.other_blocks[0].block_number,
-            bundle.other_blocks[1].block_number,
-            bundle.other_blocks[2].block_number,
-            bundle.other_blocks[3].block_number,
+            self.full_bundle.previous_node_block.block_number,
+            self.full_bundle.bundle_age_block.block_number,
+            self.full_bundle.hop_count_block.block_number,
+            self.full_bundle.payload_block.block_number,
+            self.full_bundle.other_blocks[0].block_number,
+            self.full_bundle.other_blocks[1].block_number,
+            self.full_bundle.other_blocks[2].block_number,
+            self.full_bundle.other_blocks[3].block_number,
         ]
-        self.assertNotIn(0, block_nums)
-        self.assertEqual(bundle.payload_block.block_number, 1)
-        self.assertEqual(len(block_nums), len(set(block_nums)))
+        self.assertNotIn(0, block_nums)  # primary block
+        self.assertEqual(self.full_bundle.payload_block.block_number, 1)  # payload always #1
+        self.assertEqual(len(block_nums), len(set(block_nums)))  # all unique
+
+    def test_bundle_age_block_must_be_present_when_creation_time_is_zero(self):
+        self.assertRaises(
+            ValueError,
+            Bundle,
+            self.primary_block,
+        )
+
+    def test_unable_to_insert_second_instance_of_block(self):
+        self.assertRaises(
+            ValueError, self.full_bundle.insert_canonical_block, deepcopy(self.canonical_block_bab)
+        )
+        self.assertRaises(
+            ValueError, self.full_bundle.insert_canonical_block, deepcopy(self.canonical_block_plb)
+        )
+        self.assertRaises(
+            ValueError, self.full_bundle.insert_canonical_block, deepcopy(self.canonical_block_pnb)
+        )
+        self.assertRaises(
+            ValueError, self.full_bundle.insert_canonical_block, deepcopy(self.canonical_block_hcb)
+        )
+
+    def test_correct_bundle_id(self):
+        self.assertEqual(
+            self.full_bundle.bundle_id,
+            f"{URI_SCHEME_DTN_NAME}:{SOURCE_SPECIFIC_PART}-0-{SEQ_NUMBER}",
+        )
+
+    def test_remove_present_block(self):
+        self.full_bundle.remove_block(deepcopy(self.canonical_block_bab))
+        self.assertIsNone(self.full_bundle.bundle_age_block)
+        self.full_bundle.remove_block(deepcopy(self.canonical_block_pnb))
+        self.assertIsNone(self.full_bundle.previous_node_block)
+        self.full_bundle.remove_block(deepcopy(self.canonical_block_plb))
+        self.assertIsNone(self.full_bundle.payload_block)
+        self.full_bundle.remove_block(deepcopy(self.canonical_block_hcb))
+        self.assertIsNone(self.full_bundle.hop_count_block)
+
+        target_length = len(self.full_bundle.other_blocks) - 1
+        self.full_bundle.remove_block(CanonicalBlock(192, 5, Flags(37), 0, b"123123123"))
+        self.assertEqual(len(self.full_bundle.other_blocks), target_length)
+
+    def test_remove_missing_bundle(self):
+        pb = deepcopy(self.primary_block)
+        pb.bundle_creation_time = 1234567
+        bundle = Bundle(pb)
+        bundle.remove_block(deepcopy(self.canonical_block_bab))
+        self.assertIsNone(bundle.bundle_age_block)
+        bundle.remove_block(deepcopy(self.canonical_block_pnb))
+        self.assertIsNone(bundle.previous_node_block)
+        bundle.remove_block(deepcopy(self.canonical_block_plb))
+        self.assertIsNone(bundle.payload_block)
+        bundle.remove_block(deepcopy(self.canonical_block_hcb))
+        self.assertIsNone(bundle.hop_count_block)
+
+        bundle.remove_block(CanonicalBlock(192, 5, Flags(37), 0, b"123123123"))
+        self.assertEqual(len(bundle.other_blocks), 0)
