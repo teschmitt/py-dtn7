@@ -43,17 +43,21 @@ class TestFlags(TestCase):
 
     def test_eq_true_same_type(self):
         f = deepcopy(self.f_all_true)
-        self.assertEqual(self.f_all_true, f)
+        self.assertTrue(self.f_all_true == f)
 
     def test_eq_false_same_type(self):
         f = deepcopy(self.f_all_false)
-        self.assertEqual(f, self.f_all_false)
+        self.assertTrue(f == self.f_all_false)
         f.set_flag(5)
-        self.assertNotEqual(f, self.f_all_false)
-        self.assertNotEqual(f, self.f_all_true)
+        self.assertFalse(f == self.f_all_false)
+        self.assertFalse(f == self.f_all_true)
 
     def test_eq_wrong_type(self):
         self.assertEqual(self.f_all_false.__eq__(0), NotImplemented)
+
+    def test_repr(self):
+        self.assertEqual(repr(self.f_all_false), "0x0")
+        self.assertEqual(repr(self.f_all_true), "0xffffffffffffffffffffffffffffffff")
 
 
 class TestBundleProcessingControlFlags(TestCase):
@@ -422,6 +426,18 @@ class TestCanonicalBlock(TestCase):
             CanonicalBlock.to_block_data(self.canonical_block_hcb), self.block_data_hcb
         )
 
+    def test_bad_blocktype_from_block_data(self):
+        bad_blocktype_block_data_plb = (10, 1, 42, 0, b"123456790")
+        bad_blocktype_block_data_pnb = (1, 2, 42, 0, b"123456790")
+        bad_blocktype_block_data_bab = (6, 3, 42, 0, b"123456790")
+        bad_blocktype_block_data_hcb = (7, 4, 42, 0, b"123456790")
+        self.assertRaises(ValueError, PayloadBlock.from_block_data, bad_blocktype_block_data_plb)
+        self.assertRaises(
+            ValueError, PreviousNodeBlock.from_block_data, bad_blocktype_block_data_pnb
+        )
+        self.assertRaises(ValueError, BundleAgeBlock.from_block_data, bad_blocktype_block_data_bab)
+        self.assertRaises(ValueError, HopCountBlock.from_block_data, bad_blocktype_block_data_hcb)
+
 
 class TestPayloadBlock(TestCase):
     def setUp(self):
@@ -464,6 +480,12 @@ class TestBundleAgeBlock(TestCase):
         self.assertEqual(loads(bab.data), 0)
         bab.age_milliseconds = self.age
         self.assertEqual(self.age, self.bundle_age_block.age_milliseconds)
+
+    def test_from_objects(self):
+        bab_crit = BundleAgeBlock(7, 1, BlockProcessingControlFlags(42), 0, dumps(1337), None)
+        self.assertEqual(
+            bab_crit, BundleAgeBlock.from_objects(1337, BlockProcessingControlFlags(42))
+        )
 
 
 class TestHopCountBlock(TestCase):
@@ -572,6 +594,8 @@ class TestBundle(TestCase):
         )
 
     def test_remove_present_block(self):
+        self.full_bundle.remove_block(deepcopy(self.primary_block))
+        self.assertIsNone(self.full_bundle.primary_block)
         self.full_bundle.remove_block(deepcopy(self.canonical_block_bab))
         self.assertIsNone(self.full_bundle.bundle_age_block)
         self.full_bundle.remove_block(deepcopy(self.canonical_block_pnb))
@@ -611,3 +635,31 @@ class TestBundle(TestCase):
             primary_block=self.primary_block, bundle_age_block=self.canonical_block_bab
         )
         self.assertEqual(bundle_crit, Bundle.from_block_data([0, 0]))
+
+    def test_insert_unknown_blocktype(self):
+        class UnknownBlock(CanonicalBlock):
+            pass
+
+        self.assertRaises(
+            ValueError,
+            self.full_bundle.insert_canonical_block,
+            UnknownBlock(99, 98, BlockProcessingControlFlags(97), 0, b""),
+        )
+
+    def test_insert_other_block_into_botched_other_block_field(self):
+        bad_bundle = deepcopy(self.full_bundle)
+        bad_bundle.other_blocks = None
+        new_block = CanonicalBlock(192, 0, Flags(37), 0, b"123123123")
+        bad_bundle.insert_canonical_block(new_block)
+        self.assertEqual(bad_bundle.other_blocks[0], new_block)
+
+    def test_eq_operator(self):
+        bundle = deepcopy(self.full_bundle)
+        self.assertTrue(bundle, self.full_bundle)
+
+    def test_not_eq(self):
+        bundle = Bundle(primary_block=self.primary_block, bundle_age_block=self.canonical_block_bab)
+        self.assertFalse(bundle == self.full_bundle)
+
+    def test_eq_not_bundle_type(self):
+        self.assertFalse(self.full_bundle == "Bundle")

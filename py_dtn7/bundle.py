@@ -44,10 +44,12 @@ class Flags:
     def unset_flag(self, bit: int):
         self.flags &= ~(1 << bit)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return hex(self.flags)
 
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # pragma: no cover
+        if type(self) is Flags:
+            return "[__str__ of generic 'Flags' class should not be used]"
         result = "<{}: [".format(self.__class__.__name__)
 
         attributes_to_ignore = dir(Flags)
@@ -281,7 +283,7 @@ class PrimaryBlock:
         for scheme in (destination_scheme, source_scheme, report_to_scheme):
             self.check_uri_scheme(scheme)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return (
             '<PrimaryBlock: [{}, {}, {}, [{}, "{}"], [{}, "{}"], [{}, "{}"], {}, {}, {}]>'.format(
                 self.version,
@@ -500,7 +502,7 @@ class CanonicalBlock:
         self.crc_type = crc_type
         self.data = data
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return "<{}: [{}, {}, {}, {}, {}]>".format(
             self.__class__.__name__,
             self.block_type_code,
@@ -745,7 +747,7 @@ class HopCountBlock(CanonicalBlock):
             crc=None,
         )
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return "<{}: [{}, {}, {}, {}, [hop-limit: {}, hop-count: {}]]>".format(
             self.__class__.__name__,
             self.block_type_code,
@@ -796,7 +798,8 @@ class Bundle:
             payload_block,
             *other_blocks,
         ]:
-            self.insert_canonical_block(block)
+            if block is not None:
+                self.insert_canonical_block(block)
 
         if self.primary_block.bundle_creation_time == 0 and self.bundle_age_block is None:
             raise ValueError("No bundle age block given, although creation time is zero")
@@ -855,29 +858,25 @@ class Bundle:
         if isinstance(block, PayloadBlock):
             block.block_number = 1
         else:
-            try:
-                block.block_number = self._cur_block_number
-                self._cur_block_number += 1  # TBD: make this thread-safe
-            except AttributeError:
-                return  # if block is None
+            block.block_number = self._cur_block_number
+            self._cur_block_number += 1  # TBD: make this thread-safe
 
         # assign block to appropriate field
-        block_type = type(block)
+        block_type = type(block)  # returns exact type
         try:
             block_field = self._block_type_dict[block_type]
         except KeyError:
-            print("Unknown block type '{}'. No new block inserted.".format(block_type.__name__))
-            return
-        if getattr(self, block_field) is None:
-            setattr(self, block_field, block)
-        else:
-            if block_type is CanonicalBlock:
-                try:
-                    self.other_blocks.append(block)
-                except AttributeError:  # self.other_blocks is probably None
-                    self.other_blocks = [block]
+            raise ValueError("Unknown block type '{}'.".format(block_type.__name__))
+        if block_type is not CanonicalBlock:
+            if getattr(self, block_field) is None:
+                setattr(self, block_field, block)
             else:
                 raise ValueError(format("{} already present in this bundle", block_type.__name__))
+        else:
+            try:
+                self.other_blocks.append(block)
+            except AttributeError:  # self.other_blocks is probably None
+                self.other_blocks = [block]
 
     def remove_block(self, block):
         if self.primary_block == block:
@@ -904,15 +903,13 @@ class Bundle:
             self.primary_block.sequence_number,
         )
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pragma: no cover
         return "<{}: {}>".format(
             self.__class__.__name__,
             [self.primary_block] + list(self._get_all_used_canonical_blocks()),
         )  # noqa
 
     def __eq__(self, other: Bundle) -> bool:
-        if not isinstance(other, Bundle):
-            return NotImplemented
         if self.__class__ is not other.__class__:
             return False
         attrs = [
