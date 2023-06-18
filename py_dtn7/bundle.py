@@ -833,9 +833,10 @@ class Bundle:
         # as all blocks are inserted through insert_canonical_block(...).
         # This removes redundant checks in this method.
 
+        oblocks = [CanonicalBlock.from_block_data(block) for block in blocks[1:]]
         return Bundle(
             primary_block,
-            other_blocks=(CanonicalBlock.from_block_data(block) for block in blocks[1:]),  # noqa
+            other_blocks=oblocks,  # noqa
         )
 
     def to_cbor(self) -> bytes:
@@ -862,7 +863,11 @@ class Bundle:
 
         # assign block to appropriate field
         block_type = type(block)
-        block_field = self._block_type_dict[block_type]
+        try:
+            block_field = self._block_type_dict[block_type]
+        except KeyError:
+            print("Unknown block type '{}'. No new block inserted.".format(block_type.__name__))
+            return
         if getattr(self, block_field) is None:
             setattr(self, block_field, block)
         else:
@@ -904,6 +909,27 @@ class Bundle:
             self.__class__.__name__,
             [self.primary_block] + list(self._get_all_used_canonical_blocks()),
         )  # noqa
+
+    def __eq__(self, other: Bundle) -> bool:
+        if not isinstance(other, Bundle):
+            return NotImplemented
+        if self.__class__ is not other.__class__:
+            return False
+        attrs = [
+            "primary_block",
+            "previous_node_block",
+            "bundle_age_block",
+            "hop_count_block",
+            "payload_block",
+            # other_blocks needs to be handled seperately
+        ]
+        # other_blocks have to be the same but not in the same order
+        other_equal = all(b in other.other_blocks for b in self.other_blocks) and all(
+            b in self.other_blocks for b in other.other_blocks
+        )
+        return other_equal and all(
+            [self.__getattribute__(attr) == other.__getattribute__(attr) for attr in attrs]
+        )
 
     def _get_all_used_canonical_blocks(self):
         all_canonical_blocks = (

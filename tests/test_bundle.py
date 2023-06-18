@@ -320,7 +320,6 @@ class TestPrimaryBlock(TestCase):
 
     @mock.patch.object(PrimaryBlock, "from_full_uri", return_value=(1, 2))
     def test_full_source_uri_setter(self, mock_from_full_uri):
-        mock_from_full_uri.return_value = (1, 2)
         self.primary_block.full_source_uri = 42
         self.assertTrue(mock_from_full_uri.called)
         self.assertEqual(mock_from_full_uri.call_args[0][0], 42)
@@ -328,7 +327,6 @@ class TestPrimaryBlock(TestCase):
 
     @mock.patch.object(PrimaryBlock, "from_full_uri", return_value=(3, 4))
     def test_full_destination_uri_setter(self, mock_from_full_uri):
-        mock_from_full_uri.return_value = (3, 4)
         self.primary_block.full_destination_uri = 42
         self.assertTrue(mock_from_full_uri.called)
         self.assertEqual(mock_from_full_uri.call_args[0][0], 42)
@@ -602,3 +600,14 @@ class TestBundle(TestCase):
 
         bundle.remove_block(CanonicalBlock(192, 5, Flags(37), 0, b"123123123"))
         self.assertEqual(len(bundle.other_blocks), 0)
+
+    @mock.patch("py_dtn7.bundle.CanonicalBlock.from_block_data")
+    @mock.patch("py_dtn7.bundle.PrimaryBlock.from_block_data")
+    def test_from_block_data(self, mock_pb_from_block_data, mock_cb_from_block_data):
+        mock_pb_from_block_data.return_value = self.primary_block
+        mock_cb_from_block_data.return_value = self.canonical_block_bab
+
+        bundle_crit = Bundle(
+            primary_block=self.primary_block, bundle_age_block=self.canonical_block_bab
+        )
+        self.assertEqual(bundle_crit, Bundle.from_block_data([0, 0]))
