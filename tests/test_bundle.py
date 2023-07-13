@@ -654,8 +654,15 @@ class TestBundle(TestCase):
         self.assertEqual(bad_bundle.other_blocks[0], new_block)
 
     def test_eq_operator(self):
-        bundle = deepcopy(self.full_bundle)
-        self.assertTrue(bundle, self.full_bundle)
+        bundle1 = deepcopy(self.full_bundle)
+        bundle2_1 = Bundle(
+            primary_block=self.primary_block, bundle_age_block=self.canonical_block_bab
+        )
+        bundle2_2 = Bundle(
+            primary_block=self.primary_block, bundle_age_block=self.canonical_block_bab
+        )
+        self.assertTrue(bundle1, self.full_bundle)
+        self.assertEqual(bundle2_1, bundle2_2)
 
     def test_not_eq(self):
         bundle = Bundle(primary_block=self.primary_block, bundle_age_block=self.canonical_block_bab)
