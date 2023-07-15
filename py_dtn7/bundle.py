@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, List, Self, Tuple, Union
+from typing import Optional, List, Tuple, Union
 
 from py_dtn7.utils import from_dtn_timestamp, RUNNING_MICROPYTHON
 
@@ -318,7 +318,7 @@ class PrimaryBlock:
             "sequence_number",
             "lifetime",
         ]
-        return all([self.__getattribute__(attr) == other.__getattribute__(attr) for attr in attrs])
+        return all(getattr(self, attr) == getattr(other, attr) for attr in attrs)
 
     @staticmethod
     def from_block_data(primary_block: list) -> PrimaryBlock:
@@ -420,7 +420,7 @@ class PrimaryBlock:
 
     @staticmethod
     def from_full_uri(full_uri: str) -> Tuple[int, Union[str, int, List[int]]]:
-        scheme, specific_part = full_uri.split(sep=":", maxsplit=1)
+        scheme, specific_part = full_uri.split(":", 1)
 
         if scheme == URI_SCHEME_DTN_NAME:
             if specific_part == NONE_ENDPOINT_SPECIFIC_PART_NAME:
@@ -524,7 +524,7 @@ class CanonicalBlock:
             "crc_type",
             "data",
         ]
-        return all([self.__getattribute__(attr) == other.__getattribute__(attr) for attr in attrs])
+        return all(getattr(self, attr) == getattr(other, attr) for attr in attrs)
 
     @classmethod
     def from_block_data(cls, block: list) -> CanonicalBlock:
@@ -791,13 +791,7 @@ class Bundle:
             CanonicalBlock: "other_blocks",
         }
 
-        for block in [
-            previous_node_block,
-            bundle_age_block,
-            hop_count_block,
-            payload_block,
-            *other_blocks,
-        ]:
+        for block in (previous_node_block, bundle_age_block, hop_count_block, payload_block) + tuple(other_blocks):
             if block is not None:
                 self.insert_canonical_block(block)
 
@@ -924,9 +918,7 @@ class Bundle:
         other_equal = all(b in other.other_blocks for b in self.other_blocks) and all(
             b in self.other_blocks for b in other.other_blocks
         )
-        return other_equal and all(
-            [self.__getattribute__(attr) == other.__getattribute__(attr) for attr in attrs]
-        )
+        return other_equal and all(getattr(self, attr) == getattr(other, attr) for attr in attrs)
 
     def _get_all_used_canonical_blocks(self):
         all_canonical_blocks = (
