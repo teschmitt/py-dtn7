@@ -1,4 +1,4 @@
-__version__ = "0.3.0b0"
+__version__ = "0.3.0b1"
 
 from .bundle import Bundle  # noqa F401
 from .dtn_rest_client import DTNRESTClient  # noqa F401
